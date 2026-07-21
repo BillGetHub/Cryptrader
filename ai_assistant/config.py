@@ -22,7 +22,7 @@ class Config:
     strategy_params: dict[str, Any]
     crypto_name: str
     kraken_symbol: str
-    demo: bool
+    demo: bool  # defaults to True (paper trading) when absent from the config file
     dry_run: bool
     secrets: str
     discord_bot_name: str | None
@@ -71,7 +71,7 @@ def get_config(name: str) -> Config:
             strategy_params=strategy,
             crypto_name=data["crypto_name"],
             kraken_symbol=data["kraken_symbol"],
-            demo=data.get("demo", False),
+            demo=data.get("demo", True),
             dry_run=data.get("dry_run", False),
             secrets=data["secrets"],
             discord_bot_name=data.get("discord_bot_name"),

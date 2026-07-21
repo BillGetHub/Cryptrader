@@ -59,15 +59,22 @@ python -m ai_assistant daily_active_trader
 Run it on a schedule (cron, a GitHub Action, etc.) for a fully automatic
 trader. Configuration lives in `bots/daily_active_trader.toml`:
 
-- `demo = true` — trades against Kraken's demo/paper futures environment.
-  Set to `false` only once you've validated the bot's behavior.
-- `dry_run` — when `true`, the bot decides an action but never places orders.
+- `demo = true` — trades against Kraken's demo/paper futures environment
+  (fake funds, real order flow). **This is the default when the field is
+  absent**, so a config never trades with real money by accident.
+- `dry_run` — when `true`, the bot decides an action but never places orders,
+  not even on the demo account. Defaults to `false`.
 - `strategy.balance_fraction` — fraction of account capital risked per entry.
 - `strategy.min_confidence` — minimum AI confidence required to act.
 
-Start with `demo = true` and/or `dry_run = true` and confirm the logs under
-`logs/` (and Discord notifications, if configured) look correct before
-trading with real funds.
+Start with `dry_run = true` for a first run to see the decision without any
+order, then `dry_run = false` to paper trade for real on the demo account.
+Only once you've reviewed several runs' logs under `logs/` (and Discord
+notifications, if configured) should you consider going live.
+
+Going live (`demo = false`) with real funds also requires setting the
+`CRYPTRADER_CONFIRM_LIVE=yes` environment variable, or the run aborts before
+placing any order — see [`ai_assistant/README.md`](ai_assistant/README.md#modes).
 
 ## Project layout
 

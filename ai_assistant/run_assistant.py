@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,13 @@ LOGS_DIR = Path(__file__).resolve().parents[1] / "logs"
 
 REQUIRED_SECRETS = ("kraken_api_key", "kraken_api_secret", "anthropic_api_key")
 
+LIVE_TRADING_CONFIRMATION_ENV = "CRYPTRADER_CONFIRM_LIVE"
+LIVE_TRADING_CONFIRMATION_VALUE = "yes"
+
+
+class LiveTradingNotConfirmedError(Exception):
+    """Raised when a config with ``demo = false`` runs without explicit confirmation."""
+
 
 def run_assistant(config_name: str) -> dict[str, Any]:
     """Run one cycle of a configuration: ask Claude for an outlook, act on it with
@@ -37,9 +45,17 @@ def run_assistant(config_name: str) -> dict[str, Any]:
 
     try:
         config = get_config(config_name)
+        mode = "demo" if config.demo else "live"
+        if not config.demo and os.environ.get(LIVE_TRADING_CONFIRMATION_ENV) != LIVE_TRADING_CONFIRMATION_VALUE:
+            raise LiveTradingNotConfirmedError(
+                f"Config {config_name!r} has demo = false: it would trade live with real "
+                f"funds. Paper trade it first, then set the {LIVE_TRADING_CONFIRMATION_ENV}="
+                f"{LIVE_TRADING_CONFIRMATION_VALUE!r} environment variable to confirm you "
+                "intend to run it live."
+            )
+        logger.info("Mode: %s (dry_run=%s)", mode, config.dry_run)
         secrets = get_secrets(config.secrets, required=REQUIRED_SECRETS)
         title = f"{config.crypto_name} - {config_name}"
-        mode = "demo" if config.demo else "live"
         if "discord_webhook_url" in secrets:
             notifier = DiscordNotifier(
                 secrets["discord_webhook_url"], username=config.discord_bot_name

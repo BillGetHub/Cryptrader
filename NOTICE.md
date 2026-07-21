@@ -15,10 +15,16 @@ license text.
   repository URL updated; upstream project referenced as `Upstream`.
 - `README.md`: rewritten for this repository (clone URL, project layout,
   attribution to the upstream project).
+- `ai_assistant/config.py`: a config with `demo` absent now defaults to
+  `true` (paper trading), instead of upstream's default of `false` (live
+  trading).
+- `ai_assistant/run_assistant.py`: a run with `demo = false` now aborts
+  before loading credentials or placing orders unless the
+  `CRYPTRADER_CONFIRM_LIVE=yes` environment variable is set.
 - Added this NOTICE file.
 
-No changes were made to the trading logic, API clients, or strategies under
-`kraken_kit/`, `ai_assistant/`, `strategies/`, or `common/`.
+No other changes were made to the trading logic, API clients, or strategies
+under `kraken_kit/`, `ai_assistant/`, `strategies/`, or `common/`.
 
 As required by the AGPL-3.0, this program remains free software: you may
 redistribute and/or modify it under the terms of the GNU Affero General

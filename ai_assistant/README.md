@@ -26,9 +26,19 @@ The secrets file holds `kraken_api_key`, `kraken_api_secret`, `anthropic_api_key
 
 Two top-level flags in the config TOML, alongside `crypto_name` and `kraken_symbol`:
 
-- `demo = true` routes orders to `demo-futures.kraken.com` (separate API keys, generated there).
-- `dry_run = true` decides and logs without placing any order.
-- **Both flags default to off when absent: the assistant trades live with real orders.**
+- `demo = true` routes orders to `demo-futures.kraken.com` (separate API keys, generated there). **Defaults to `true` when absent, so a config always paper trades unless it explicitly opts out.**
+- `dry_run = true` decides and logs without placing any order. Defaults to `false`.
+
+Running a config with `demo = false` (live trading with real funds) additionally
+requires the `CRYPTRADER_CONFIRM_LIVE=yes` environment variable to be set, or the
+run aborts before touching any credentials or placing any order:
+
+```bash
+CRYPTRADER_CONFIRM_LIVE=yes uv run python -m ai_assistant my_assistant
+```
+
+Paper trade a config for a while with `demo = true` (the default) before ever
+setting `demo = false`.
 
 ## Run once
 
