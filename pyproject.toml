@@ -1,0 +1,25 @@
+[project]
+name = "cryptrader"
+version = "0.1.0"
+description = "Crypto auto trader for Kraken, built on RobotTraders/KrakenTradingKit"
+license = "AGPL-3.0-only"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.31",
+    "pandas>=2.2",
+    "python-dotenv>=1.0",
+    "jupyter>=1.0",
+    "ipykernel>=6.29",
+    "pydantic>=2.0",
+]
+
+[project.urls]
+Repository = "https://github.com/billgethub/cryptrader"
+Upstream = "https://github.com/RobotTraders/KrakenTradingKit"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["kraken_kit", "ai_assistant", "common", "strategies"]
