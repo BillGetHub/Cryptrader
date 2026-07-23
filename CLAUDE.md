@@ -2,7 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Defining Success And Failure of this Cryptrader project
+# Purpose
+
+To create a crypto autotrading bot by choosing the best proven method with references provided in subdirectories includes :
+
+KrakenTradingKit
+
+# Defining Success And Failure of this Cryptrader project 
 
 Failure if :
 * drawdown > 8%
@@ -67,6 +73,14 @@ As part of the interview, lets work through any key decisions together to help i
 The rule tells Claude what to verify.
 The tool tells Claude how to verify.
 
+
+5. "Based on this conversation, Build me a Skill."
+Based on this conversation enhance any skill, I use to include a gotcha section, so we don't make this mistake again.
+
+6. "Automate this"
+
+Be cautious when using it so I don't always improve in right direction.
+
 # 3 Layer Approach
 
 1. Update my CLAUDE.md
@@ -85,9 +99,6 @@ Before you start any work, state how you work to verify it.
 After you finish, run the verification and report results.
 Before changing any code in [Hot zone, i.e., payment/], ask me first and explain the blast radius.
 
-5. "Based on this conversation, Build me a Skill."
-Based on this conversation enhance any skill, I use to include a gotcha section, so we don't make this mistake again.
+# Reference
 
-6. "Automate this"
-
-Be cautious when using it so I don't always improve in right direction.
+# Review
