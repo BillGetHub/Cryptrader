@@ -1,0 +1,11 @@
+name: RsiMeanReversion
+symbol: BTC/USD
+timeframe: 1h
+
+params:
+  rsi_period: 14
+  rsi_entry_threshold: 25
+
+risk:
+  stop_loss_pct: 1.4
+  size_r_pct: 0.5

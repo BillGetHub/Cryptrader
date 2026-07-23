@@ -1,0 +1,5 @@
+Data/*.csv
+backtest_results.log
+venv/
+__pycache__/
+*.pyc
