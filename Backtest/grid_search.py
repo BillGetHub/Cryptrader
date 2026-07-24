@@ -5,14 +5,18 @@ and couldn't clear it moving one lever at a time. This sweeps combinations of
 levers together, fetching the data once and re-running the (fast, local,
 no-network) simulation for every combination in the grid. A win-rate-focused
 run of this search found the confirmed baseline in CLAUDE.md (2026-07-24):
-71.5% win rate, +0.18% return, Sharpe +0.06 on BTC-USD 1h/730d --
-    --rsi-entry 27 --rsi-exit 30 --stop-loss-pct 4.5
-    --enable-short --short-rsi-entry 78 --short-rsi-exit 62 --rsi-period 14
-That clears CLAUDE.md's Failure conditions but not yet Success (return >=
-+5%/30d, Sharpe >= 1.2). The grid below widens out from that baseline to
-also cover combinations that flipped Sharpe/return positive during
-single-variable testing but scored lower on win rate (e.g. short-rsi-entry
-70, rsi-period 10) -- edit the *_GRID constants to widen or shift further.
+71.5% win rate, +0.18% return, Sharpe +0.06 on BTC-USD 1h/730d.
+
+Manual sweeping of --enable-range-filter (only trade when price is within
+X% of a 200-bar SMA -- i.e. filter OUT strong trends, since RSI mean
+reversion works best in range-bound conditions) then found a big single
+improvement: Sharpe 0.06 -> 0.68 at 2% distance / 200-bar SMA -- more than
+10x, though still short of Success (Sharpe >= 1.2, return >= +5%/30d). This
+grid always enables both --enable-short and --enable-range-filter (range_ma
+fixed at 200, confirmed best against 100 and 300 by hand) and sweeps the
+RSI/stop parameters together with the range distance, since combining
+levers has outperformed one-at-a-time tuning every time in this project so
+far -- edit the *_GRID constants to widen or shift further.
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -31,12 +35,14 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [3.5, 4.0, 4.5, 5.0]
-RSI_ENTRY_GRID = [25, 26, 27, 28]
-RSI_EXIT_GRID = [29, 30, 31, 32]
-SHORT_RSI_ENTRY_GRID = [70, 75, 78, 80]
-SHORT_RSI_EXIT_GRID = [58, 60, 62, 65]
-RSI_PERIOD_GRID = [10, 12, 14]
+STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0]
+RSI_ENTRY_GRID = [26, 27, 28]
+RSI_EXIT_GRID = [29, 30, 31]
+SHORT_RSI_ENTRY_GRID = [75, 78, 80]
+SHORT_RSI_EXIT_GRID = [60, 62, 65]
+RSI_PERIOD_GRID = [12, 14]
+RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0]
+RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand; not swept here
 
 SORT_KEYS = {
     "win_rate": ["win_rate_pct", "sharpe"],
@@ -79,7 +85,13 @@ def main() -> None:
     combos = [
         combo
         for combo in itertools.product(
-            STOP_LOSS_PCT_GRID, RSI_ENTRY_GRID, RSI_EXIT_GRID, SHORT_RSI_ENTRY_GRID, SHORT_RSI_EXIT_GRID, RSI_PERIOD_GRID
+            STOP_LOSS_PCT_GRID,
+            RSI_ENTRY_GRID,
+            RSI_EXIT_GRID,
+            SHORT_RSI_ENTRY_GRID,
+            SHORT_RSI_EXIT_GRID,
+            RSI_PERIOD_GRID,
+            RANGE_MAX_DISTANCE_PCT_GRID,
         )
         if combo[1] < combo[2] and combo[3] > combo[4]  # rsi_entry < rsi_exit, short_entry > short_exit
     ]
@@ -87,7 +99,15 @@ def main() -> None:
 
     start = time.time()
     results = []
-    for i, (stop_loss_pct, rsi_entry, rsi_exit, short_rsi_entry, short_rsi_exit, rsi_period) in enumerate(combos):
+    for i, (
+        stop_loss_pct,
+        rsi_entry,
+        rsi_exit,
+        short_rsi_entry,
+        short_rsi_exit,
+        rsi_period,
+        range_max_distance_pct,
+    ) in enumerate(combos):
         result = simulate(
             df,
             rsi_period,
@@ -99,6 +119,9 @@ def main() -> None:
             enable_short=True,
             short_rsi_entry=short_rsi_entry,
             short_rsi_exit=short_rsi_exit,
+            enable_range_filter=True,
+            range_ma_period=RANGE_MA_PERIOD,
+            range_max_distance_pct=range_max_distance_pct,
         )
         metrics = compute_metrics(
             result["equity"], result["trades"], args.initial_balance, INTERVAL_BARS_PER_YEAR[args.interval]
@@ -111,6 +134,7 @@ def main() -> None:
                 "short_rsi_entry": short_rsi_entry,
                 "short_rsi_exit": short_rsi_exit,
                 "rsi_period": rsi_period,
+                "range_max_distance_pct": range_max_distance_pct,
                 "win_rate_pct": metrics["win_rate_pct"],
                 "total_return_pct": metrics["total_return_pct"],
                 "worst_30d_return_pct": metrics["worst_30d_return_pct"],

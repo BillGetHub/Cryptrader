@@ -131,12 +131,14 @@ the actual rolling 30-day return, not the total-period return), and how many
 still hit a Failure condition, then the top results ranked by `--sort-by`
 (`win_rate`, `sharpe`, or `return`; default `sharpe`, since that's the current
 gap versus Success). Edit the `*_GRID` constants at the top of `grid_search.py`
-to widen, narrow, or shift the search -- the default grid (~3,072 combinations,
+to widen, narrow, or shift the search -- the default grid (~1,944 combinations,
 ~1-2 min on 730 days of hourly data) covers: `--stop-loss-pct`, `--rsi-entry`,
-`--rsi-exit`, `--short-rsi-entry`, `--short-rsi-exit`, `--rsi-period`, always
-with `--enable-short` on. Entry/exit bands that would overlap (e.g.
-`--rsi-entry` >= `--rsi-exit`, which causes whipsaw trades -- see the "known
-trap" below) are skipped automatically.
+`--rsi-exit`, `--short-rsi-entry`, `--short-rsi-exit`, `--rsi-period`, and
+`--range-max-distance-pct`, always with `--enable-short` and
+`--enable-range-filter` on (`--range-ma-period` fixed at 200, confirmed best by
+hand). Entry/exit bands that would overlap (e.g. `--rsi-entry` >= `--rsi-exit`,
+which causes whipsaw trades -- see the "known trap" below) are skipped
+automatically.
 
 **Known trap:** the long entry threshold must stay below the exit threshold
 (and the short entry must stay above the short exit). If they cross, a
