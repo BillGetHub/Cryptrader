@@ -14,12 +14,17 @@ ATR-stop, shorter RSI period, a much lower short-exit threshold). Each new
 coin needs its own run through the tuning process (`grid_search.py`, then
 hand-tune), not a copy of another coin's numbers.
 
-**Data source note:** BTCUSDT results below were fetched as `BTC-USD` via
-`yfinance` (Yahoo has no `BTC-USDT` ticker). ETHUSDT results were fetched as
-genuine `ETH/USDT` via `--source ccxt --exchange binance` (Yahoo has no
-`ETH-USDT` ticker either, and Kraken's ccxt pagination caps out around 30
-days -- Binance has neither limitation, confirmed 2026-07-24). See
-`Backtest/README.md` for the full symbol-normalization and data-source notes.
+**Data source note:** all three coins' *current* confirmed baselines are now
+fetched as genuine `<COIN>/USDT` via `--source ccxt --exchange binance`
+(Yahoo has no `*-USDT` tickers, and Kraken's ccxt pagination caps out around
+30 days -- Binance has neither limitation, confirmed 2026-07-24). BTC's
+baseline was originally tuned on Yahoo's `BTC-USD` fiat pair and later found
+to perform meaningfully worse on genuine Binance data (Sharpe +1.38 -> +0.59
+with identical parameters) -- it was re-tuned directly on Binance and that
+superseded baseline is what's current now (see the BTCUSDT section below for
+the full story; the old Yahoo-only baseline is kept for traceability, not
+current). See `Backtest/README.md` for the full symbol-normalization and
+data-source notes.
 
 CLAUDE.md's Success/Failure thresholds, for reference:
 - **Success**: return >= +5%/30d, Sharpe >= 1.2, drawdown <= 8%
@@ -76,36 +81,82 @@ Failure condition and usually 2 of 3 Success conditions (Sharpe, drawdown),
 but none cleared the 30-day return target. Listed oldest to newest; each
 superseded the last as the project's official CLAUDE.md baseline.
 
-### Current baseline (2026-07-24) -- ATR-based stop
+### Current baseline (2026-07-24) -- ATR(10)x2.0 on genuine Binance BTCUSDT
+```
+--rsi-entry 28 --rsi-exit 29 --rsi-period 14 --enable-atr-stop --atr-period 10 --atr-multiplier 2.0
+--enable-short --short-rsi-entry 76 --short-rsi-exit 50
+--enable-range-filter --range-ma-period 200 --range-max-distance-pct 2.0
+```
+78.9% win rate, 76 trades (long 61, short 15), +6.54% return (730d), Sharpe
++1.52, max drawdown -2.32%, worst 30d -1.90%, best 30d +2.32%. Fetched via
+`--source ccxt --exchange binance --symbol BTCUSDT` (genuine USDT pair, full
+730-day history) -- same data source ETH and BNB were tuned on, unlike the
+superseded baseline below.
+
+**Why this replaced the ATR(21)x2.0/Yahoo baseline:** the multi-asset
+portfolio test (below) surfaced that the old baseline's exact parameters,
+re-run on genuine Binance BTCUSDT, dropped from Sharpe +1.38 to +0.59 --
+no longer clearing the >=1.2 Success bar. BTC had never been tuned directly
+on real exchange data the way ETH/BNB were. Re-tuning found a genuinely
+different optimum, not just a rescaled version of the old one:
+
+1. **grid_search.py, 4 passes** (7800 -> 9000 -> 2250 -> 36 combos), same
+   process as ETH/BNB. Pass 1 (grid centered on the Yahoo-tuned values) hit
+   the edge on rsi_entry, short_rsi_entry, short_rsi_exit, and
+   range_max_distance_pct; rsi_period=14 beat 12 decisively. Pass 2 widened
+   those four and raised Sharpe 1.30 -> 1.64, but rsi_entry/short_rsi_entry/
+   short_rsi_exit/range_max_distance_pct all hit new edges again, while
+   rsi_period=14 and stop_loss_pct's flatness (5.0-6.0, near-identical
+   Sharpe) both got confirmed and were fixed. Pass 3 widened the remaining
+   four and confirmed rsi_entry=28, rsi_exit=29, short_rsi_exit=50 as
+   genuine interior peaks -- but short_rsi_entry and range_max_distance_pct
+   both hit the edge in the *opposite* direction from what was widened
+   (a methodology misstep: widening down turned out to be backwards for
+   both). Pass 4 corrected course and confirmed short_rsi_entry=76 and
+   range_max_distance_pct=2.0 as genuine peaks, each bracketed by losing
+   neighbors on both sides.
+2. **Fixed-stop result** (5.5% stop, no ATR): 82.9% win rate, 70 trades,
+   +1.64% return, **Sharpe +1.63** (higher than the ATR baseline above),
+   max drawdown -0.38%. Fully bracketed on every dimension.
+3. **ATR-stop follow-up**, mirroring exactly how the original ATR-stop win
+   was found on Yahoo data: tested on top of the bracketed fixed-stop RSI
+   parameters. ATR period and multiplier were bracketed independently, then
+   jointly, landing on ATR(10)x2.0 as the confirmed peak -- both neighbors
+   on both axes tested and lost: multiplier 1.0 (Sharpe 0.87) and 1.5 (1.35)
+   both worse than 2.0 (1.52), which in turn beat 2.5 (1.29); period 7 (1.34)
+   and 21 (1.29)/30 (1.31) both worse than 10 (1.52).
+
+**Close alternatives considered, not adopted:**
+- **Fixed 5.5% stop, no ATR** (step 2 above): higher Sharpe (+1.63 vs
+  +1.52) but far less return (+1.64% vs +6.54%) and a much smaller
+  best-30d (+0.36% vs +2.32%, further from the +5% target).
+- **ATR(21)x1.5**: 73.4% win rate, 79 trades, +8.03% return (highest of any
+  BTC config found, Binance or Yahoo), Sharpe +1.46, max drawdown -2.58%,
+  best 30d +2.01%. Only bracketed on the multiplier axis (1.5 beat 2.0 and
+  2.5 at period=21), not jointly with period -- less rigorously confirmed
+  than ATR(10)x2.0, and lower Sharpe.
+
+ATR(10)x2.0 was chosen as the best balance: not dominated by either
+alternative on both axes at once, and the most rigorously bracketed of the
+three (every lever confirmed with losing neighbors on both sides).
+
+### Superseded baseline (2026-07-24) -- ATR(21)x2.0, Yahoo BTC-USD only
 ```
 --rsi-entry 28 --rsi-exit 29 --enable-atr-stop --atr-period 21 --atr-multiplier 2.0
 --enable-short --short-rsi-entry 78 --short-rsi-exit 65
 --enable-range-filter --range-ma-period 200 --range-max-distance-pct 3.0
 ```
 74.0% win rate, 131 trades, +8.01% return (730d), Sharpe +1.38, max drawdown
--1.84%, worst 30d -1.27%, best 30d +2.40%. Closest any non-leveraged baseline
-got to the return target. Replacing the fixed stop with a volatility-adjusted
-one (this change alone) roughly 4.6x'd return over the prior baseline.
-
-### Data-source caveat: same parameters on genuine Binance BTCUSDT
-
-This baseline was tuned and confirmed exclusively on Yahoo Finance's
-`BTC-USD` fiat pair. Re-running the identical parameters on genuine
-`BTCUSDT` via `--source ccxt --exchange binance` (found incidentally during
-the 2026-07-24 multi-asset portfolio test, see the "Multi-asset portfolio"
-section below) gives meaningfully weaker results: 69.5% win rate (vs 74.0%),
-+3.23% return (vs +8.01%), **Sharpe +0.59 (vs +1.38 -- no longer clears the
->=1.2 Success bar**, though still positive so doesn't breach Failure), max
-drawdown -3.16% (vs -1.84%), same 131 trades (a coincidental exact match
-despite genuinely different underlying price data). Worst/best rolling 30d
-wasn't captured by this particular test run (multi_asset.py's per-asset
-summary doesn't compute it).
-
-ETH and BNB were both tuned directly on Binance data from the start (see
-their sections below), so neither has this exposure. BTC has never been
-re-tuned on Binance data -- whether its parameters can be re-bracketed there
-to recover Sharpe, the way ETH/BNB were tuned fresh on Binance, is an open
-question not yet attempted.
+-1.84%, worst 30d -1.27%, best 30d +2.40% -- **but these numbers only ever
+held on Yahoo's `BTC-USD` fiat pair**. Re-running the identical parameters
+on genuine Binance `BTCUSDT` (found incidentally via the multi-asset
+portfolio test) gave 69.5% win rate, +3.23% return, **Sharpe +0.59** (no
+longer clearing the >=1.2 Success bar), max drawdown -3.16%, same 131 trades
+(a coincidental exact match despite genuinely different underlying price
+data). Superseded by the Binance-native baseline above; kept here for
+traceability. When this was first found, replacing the fixed stop with a
+volatility-adjusted one roughly 4.6x'd return over the then-current
+fixed-stop baseline (below) -- on Yahoo data, at least.
 
 ### Prior baseline -- fixed 5.0% stop
 ```
@@ -303,9 +354,12 @@ Per-asset (all on genuine Binance data, 1h/730d, 17520 bars each):
 | ETHUSDT | 105 | 78.1% | +3.55% | +1.25 | -2.64% |
 | BNBUSDT | 152 | 75.7% | +3.56% | +1.51 | -1.32% |
 
-(BTC's per-asset numbers here are the Binance cross-validation referenced in
-the data-source caveat above -- confirmed weaker than its Yahoo-validated
-baseline.)
+(BTC's per-asset numbers here are the Binance cross-validation that motivated
+re-tuning BTC directly on Binance -- see the BTCUSDT section above. This
+portfolio run predates that re-tuning and used the old ATR(21)x2.0/Yahoo-
+tuned parameters for BTC's leg, not the current ATR(10)x2.0 baseline. The
+portfolio has not been re-run with BTC's new parameters; doing so is a
+natural follow-up, not yet done.)
 
 Portfolio (capital split evenly across the three, daily-resampled equity
 curve since hourly bars from different pairs don't align bar-for-bar):

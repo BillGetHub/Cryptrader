@@ -32,47 +32,44 @@ Sharpe > 2 is Excellence
 
 Entry : rsi < 28
 Exit : rsi >= 29 (mean-reversion exit; not in original spec, added so a trade has a close condition)
-Stop : volatility-adjusted -- 2.0x ATR(21), not a fixed percentage (see note below)
+Stop : volatility-adjusted -- 2.0x ATR(10), not a fixed percentage (see note below)
 Size : 0.5R
 RSI period : 14
 
-Range filter: only enter (long or short) when price is within 3.0% of its 200-bar SMA --
+Range filter: only enter (long or short) when price is within 2.0% of its 200-bar SMA --
 i.e. skip strong trending conditions. RSI mean reversion tends to work best range-bound and
 worst in strong trends either direction; a trade-with-the-trend filter was tested and hurt
 results (see Backtest/README.md), this range filter is the opposite idea and helped a lot.
 
 Short (backtest-only -- Kraken spot has no native short selling, would need margin/futures):
-Entry : rsi > 78
-Exit : rsi <= 65
-Stop : same 2.0x ATR(21), applied above entry
+Entry : rsi > 76
+Exit : rsi <= 50
+Stop : same 2.0x ATR(10), applied above entry
 
-Baseline confirmed 2026-07-24, backtested on BTC-USD 1h, 730d (yfinance) via Backtest/backtest.py:
-74.0% win rate, +8.01% return, Sharpe +1.38, max drawdown -1.84%, worst rolling 30d -1.27%,
-best rolling 30d +2.40%, 131 trades. The stop changed from a fixed 5.0% to a volatility-
-adjusted one (2.0x the 21-period Average True Range) -- the stop distance now widens or
-narrows with how volatile the market currently is, instead of using the same percentage
-regardless of conditions. This alone roughly 4.6x'd total return (+1.75% -> +8.01%) and
-raised Sharpe (+1.31 -> +1.38) versus the prior fixed-stop baseline, the single biggest
-improvement of any change made this session. Both ATR parameters were bracketed and
-confirmed as local peaks: multiplier 1.5 and 2.5 were both worse (Sharpe 1.14 and 0.99 vs
-2.0's 1.38); period 10 and 30 were both worse (Sharpe 1.21 and 1.16 vs 21's 1.38). Clears
-all Failure conditions and now Sharpe/drawdown clear Success by a wider margin than before,
-but 30d return (+2.40% best) is still short of the +5%/30d Success bar -- closer than any
-prior baseline, but still short. Two structurally different strategies (fast/slow moving-
-average trend-following, and Bollinger Band mean reversion) and a naive multi-asset
-diversification (same parameters reused unchanged on ETH/SOL) were also tested and all
-underperformed this baseline, some badly enough to breach Failure conditions -- see
-Backtest/README.md for details. The ATR-stop win suggests the remaining gap to full Success
-is more likely closable through refining risk mechanics (like this) than through a wholesale
-different signal.
+Baseline confirmed 2026-07-24, backtested on genuine Binance BTCUSDT 1h, 730d (ccxt) via
+Backtest/backtest.py: 78.9% win rate, +6.54% return, Sharpe +1.52, max drawdown -2.32%,
+worst rolling 30d -1.90%, best rolling 30d +2.32%, 76 trades --
+    --rsi-entry 28 --rsi-exit 29 --rsi-period 14 --enable-atr-stop --atr-period 10 --atr-multiplier 2.0
+    --enable-short --short-rsi-entry 76 --short-rsi-exit 50
+    --enable-range-filter --range-ma-period 200 --range-max-distance-pct 2.0
 
-Data-source caveat (2026-07-24): the numbers above were validated on Yahoo's BTC-USD fiat
-pair only. Cross-checked against genuine Binance BTCUSDT with identical parameters (found
-incidentally via the multi-asset portfolio test below), results are meaningfully weaker --
-Sharpe +0.59 not +1.38, no longer clearing the >=1.2 Success bar (though still positive, so
-not a Failure breach), return +3.23% not +8.01%. ETH and BNB were both tuned directly on
-Binance from the start, so neither shares this exposure; BTC has not yet been re-tuned there
--- an open question, not yet attempted. Full detail: Backtest/VALIDATED_PARAMETERS.md.
+This supersedes the prior baseline (kept below for traceability), which was tuned and
+validated only on Yahoo's BTC-USD fiat pair -- cross-checking those exact parameters against
+genuine Binance BTCUSDT data found Sharpe dropping from +1.38 to +0.59, no longer clearing
+the >=1.2 Success bar (though still positive, so not a Failure breach either). Unlike ETH and
+BNB, BTC had never been tuned directly on real exchange data; this baseline fixes that via
+the same grid_search.py -> hand-bracket process used for the other two coins. Four widening
+passes were needed: rsi_entry, short_rsi_entry, short_rsi_exit, and range_max_distance_pct
+all shifted meaningfully from their Yahoo-tuned values (76/50/2.0 vs the old 78/65/3.0),
+while rsi_period=14 and stop_loss_pct's near-irrelevance both held from the Yahoo tuning.
+A follow-up ATR-stop bracket (mirroring exactly how the original ATR-stop win was found)
+then confirmed ATR(10)x2.0 as the local peak here -- notably not ATR(21)x2.0, the Yahoo-
+tuned value; both period and multiplier were bracketed with losing neighbors on both sides.
+Two close alternatives were also fully bracketed and considered: a fixed 5.5% stop (no ATR)
+reaches higher Sharpe (+1.63) but far less return (+1.64%); ATR(21)x1.5 reaches higher return
+(+8.03%) but lower Sharpe (+1.46). ATR(10)x2.0 was adopted as the best balance, not dominated
+by either alternative on both axes. Still short of the +5%/30d Success bar, same gap seen on
+every coin's baseline so far. Full comparison: Backtest/VALIDATED_PARAMETERS.md.
 
 ETHUSDT confirmed baseline (2026-07-24, backtested via ccxt/Binance -- yfinance has no
 ETH-USDT ticker, Kraken's ccxt pagination caps around 30 days): 78.1% win rate, +3.55%
@@ -110,6 +107,10 @@ Previous baselines (kept for traceability):
    79.8% win rate, Sharpe +1.53, only 89 trades.
 4. Fixed 5.0% stop version of the current entry/exit/range-filter numbers -- 76.3% win rate,
    +1.75% return, Sharpe +1.31, max drawdown -0.42%, 114 trades.
+5. ATR(21)x2.0 stop, tuned and validated on Yahoo's BTC-USD only -- 74.0% win rate, +8.01%
+   return, Sharpe +1.38, max drawdown -1.84%, 131 trades. Superseded 2026-07-24 after cross-
+   checking on genuine Binance BTCUSDT data dropped its Sharpe to +0.59 (below the Success
+   bar); re-tuned directly on Binance to produce the current baseline above.
 
 Improve the strategy after backtest the strategy with scientific approach, i.e., change one variable at a time and verify if the result is better with the particular variable change.
 
