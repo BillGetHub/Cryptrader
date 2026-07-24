@@ -1,0 +1,218 @@
+"""Backtest harness for the RSI mean-reversion strategy defined in CLAUDE.md.
+
+Entry: RSI(period) < entry threshold
+Stop:  stop_loss_pct below entry
+Size:  position_size_r percent of account balance risked per trade
+
+CLAUDE.md defines an entry and a stop but no exit target. This harness closes
+a position on whichever comes first: the stop being hit, or RSI recovering to
+>= --rsi-exit (a mean-reversion exit, default 50). That default is an
+assumption, not a spec requirement -- tune it like any other variable.
+
+Usage:
+    python backtest.py --symbol BTC-USD --interval 1h --period 730d
+"""
+import argparse
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+
+INTERVAL_BARS_PER_YEAR = {
+    "1m": 365 * 24 * 60,
+    "5m": 365 * 24 * 12,
+    "15m": 365 * 24 * 4,
+    "30m": 365 * 24 * 2,
+    "1h": 365 * 24,
+    "1d": 365,
+}
+
+
+def compute_rsi(closes: pd.Series, period: int) -> pd.Series:
+    delta = closes.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, min_periods=period).mean()
+    avg_loss = loss.ewm(alpha=1 / period, min_periods=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
+def fetch_data(symbol: str, interval: str, period: str) -> pd.DataFrame:
+    df = yf.download(symbol, interval=interval, period=period, auto_adjust=True, progress=False)
+    if df.empty:
+        raise SystemExit(f"No data returned for {symbol} interval={interval} period={period}")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
+
+
+def simulate(
+    df: pd.DataFrame,
+    rsi_period: int,
+    rsi_entry: float,
+    rsi_exit: float,
+    stop_loss_pct: float,
+    position_size_r: float,
+    initial_balance: float,
+) -> dict:
+    rsi = compute_rsi(df["Close"], rsi_period)
+
+    balance = initial_balance
+    position = None  # dict: entry_time, entry_price, stop_price, size, risk_amount
+    equity_curve = []
+    trades = []
+
+    for i in range(len(df)):
+        ts = df.index[i]
+        high, low, close = df["High"].iloc[i], df["Low"].iloc[i], df["Close"].iloc[i]
+        r = rsi.iloc[i]
+
+        if position is not None:
+            exit_price, reason = None, None
+            if low <= position["stop_price"]:
+                exit_price, reason = position["stop_price"], "stop"
+            elif not np.isnan(r) and r >= rsi_exit:
+                exit_price, reason = close, "rsi_exit"
+
+            if exit_price is not None:
+                pnl = position["size"] * (exit_price - position["entry_price"])
+                balance += pnl
+                trades.append(
+                    {
+                        "entry_time": position["entry_time"],
+                        "exit_time": ts,
+                        "entry_price": position["entry_price"],
+                        "exit_price": exit_price,
+                        "size": position["size"],
+                        "pnl": pnl,
+                        "r_multiple": pnl / position["risk_amount"] if position["risk_amount"] else 0.0,
+                        "reason": reason,
+                    }
+                )
+                position = None
+
+        if position is None and not np.isnan(r) and r < rsi_entry:
+            entry_price = close
+            stop_price = entry_price * (1 - stop_loss_pct / 100)
+            stop_distance = entry_price - stop_price
+            risk_amount = balance * position_size_r / 100
+            size = risk_amount / stop_distance if stop_distance > 0 else 0.0
+            if size > 0:
+                position = {
+                    "entry_time": ts,
+                    "entry_price": entry_price,
+                    "stop_price": stop_price,
+                    "size": size,
+                    "risk_amount": risk_amount,
+                }
+
+        open_pnl = position["size"] * (close - position["entry_price"]) if position else 0.0
+        equity_curve.append({"time": ts, "equity": balance + open_pnl})
+
+    equity_df = pd.DataFrame(equity_curve).set_index("time")
+    trades_df = pd.DataFrame(trades)
+    return {"equity": equity_df, "trades": trades_df, "final_balance": balance}
+
+
+def compute_metrics(
+    equity_df: pd.DataFrame, trades_df: pd.DataFrame, initial_balance: float, bars_per_year: float
+) -> dict:
+    equity = equity_df["equity"]
+    total_return_pct = (equity.iloc[-1] / initial_balance - 1) * 100
+
+    period_returns = equity.pct_change().dropna()
+    sharpe = (
+        (period_returns.mean() / period_returns.std()) * np.sqrt(bars_per_year)
+        if period_returns.std() > 0
+        else 0.0
+    )
+
+    running_max = equity.cummax()
+    drawdown = (equity - running_max) / running_max
+    max_drawdown_pct = drawdown.min() * 100
+
+    daily_equity = equity.resample("1D").last().dropna()
+    rolling_30d_return = daily_equity.pct_change(30).dropna() * 100
+
+    num_trades = len(trades_df)
+    win_rate_pct = (trades_df["pnl"] > 0).mean() * 100 if num_trades else 0.0
+
+    return {
+        "total_return_pct": total_return_pct,
+        "sharpe": sharpe,
+        "max_drawdown_pct": max_drawdown_pct,
+        "num_trades": num_trades,
+        "win_rate_pct": win_rate_pct,
+        "worst_30d_return_pct": rolling_30d_return.min() if not rolling_30d_return.empty else float("nan"),
+        "best_30d_return_pct": rolling_30d_return.max() if not rolling_30d_return.empty else float("nan"),
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Backtest the CLAUDE.md RSI mean-reversion strategy via yfinance.")
+    parser.add_argument("--symbol", default="BTC-USD")
+    parser.add_argument("--interval", default="1h", choices=sorted(INTERVAL_BARS_PER_YEAR))
+    parser.add_argument(
+        "--period",
+        default="730d",
+        help="yfinance lookback window (e.g. 730d, 60d, max). Yahoo caps intraday history: "
+        "1h ~730d, 1m ~7d.",
+    )
+    parser.add_argument("--rsi-period", type=int, default=14)
+    parser.add_argument("--rsi-entry", type=float, default=25.0)
+    parser.add_argument(
+        "--rsi-exit",
+        type=float,
+        default=50.0,
+        help="RSI level that closes an open position. Not in CLAUDE.md spec -- an assumption to tune.",
+    )
+    parser.add_argument("--stop-loss-pct", type=float, default=1.4)
+    parser.add_argument("--position-size-r", type=float, default=0.5)
+    parser.add_argument("--initial-balance", type=float, default=10000.0)
+    parser.add_argument("--csv-out", default=None, help="optional path to write the equity curve as CSV")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    df = fetch_data(args.symbol, args.interval, args.period)
+    result = simulate(
+        df,
+        args.rsi_period,
+        args.rsi_entry,
+        args.rsi_exit,
+        args.stop_loss_pct,
+        args.position_size_r,
+        args.initial_balance,
+    )
+    metrics = compute_metrics(
+        result["equity"], result["trades"], args.initial_balance, INTERVAL_BARS_PER_YEAR[args.interval]
+    )
+
+    print(f"Symbol:              {args.symbol}")
+    print(f"Interval / Period:   {args.interval} / {args.period}")
+    print(f"Bars:                {len(df)}")
+    print(f"RSI entry/exit:      <{args.rsi_entry} / >={args.rsi_exit}")
+    print(f"Stop / Size:         {args.stop_loss_pct}% / {args.position_size_r}R")
+    print()
+    print(f"Trades:              {metrics['num_trades']}")
+    print(f"Win rate:            {metrics['win_rate_pct']:.1f}%")
+    print(f"Total return:        {metrics['total_return_pct']:.2f}%")
+    print(f"Sharpe (annualized): {metrics['sharpe']:.2f}")
+    print(f"Max drawdown:        {metrics['max_drawdown_pct']:.2f}%")
+    print(f"Worst rolling 30d:   {metrics['worst_30d_return_pct']:.2f}%")
+    print(f"Best rolling 30d:    {metrics['best_30d_return_pct']:.2f}%")
+    print()
+    print("CLAUDE.md thresholds:")
+    print("  Success: return >= +5%/30d, sharpe >= 1.2, drawdown <= 8%")
+    print("  Failure: drawdown > 8%, return < -4%/30d, sharpe < 0")
+
+    if args.csv_out:
+        result["equity"].to_csv(args.csv_out)
+        print(f"\nEquity curve written to {args.csv_out}")
+
+
+if __name__ == "__main__":
+    main()
