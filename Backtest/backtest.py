@@ -6,11 +6,14 @@ Size:  position_size_r percent of account balance risked per trade
 
 CLAUDE.md defines an entry and a stop but no exit target; --rsi-exit closes a
 position on RSI recovering back up, or the stop being hit. Defaults below are
-the confirmed baseline (CLAUDE.md, 2026-07-24): 71.5% win rate, +0.18% return,
-Sharpe +0.06, max drawdown -2.01%, worst rolling 30d -0.84% on BTC-USD 1h/730d.
---enable-short reproduces the short leg that baseline includes; without it
-you get the long-only subset. Still short of CLAUDE.md's Success thresholds
-(return >= +5%/30d, Sharpe >= 1.2) -- keep tuning with grid_search.py.
+the confirmed baseline (CLAUDE.md, 2026-07-24): 79.8% win rate, +1.72% return,
+Sharpe +1.53, max drawdown -0.42%, worst rolling 30d -0.30%, best rolling 30d
++0.37% on BTC-USD 1h/730d. --enable-short and --enable-range-filter reproduce
+the short leg and range filter that baseline includes; without them you get a
+smaller subset. Sharpe and drawdown now clear CLAUDE.md's Success thresholds,
+but 30d return (+0.37% best) is far short of +5%/30d -- with ~89 trades over
+730 days and 0.5R risk per trade, this is a very safe configuration but
+structurally capped on absolute return. See CLAUDE.md for the full note.
 
 Data can come from either source:
     --source yfinance (default): Yahoo Finance via the yfinance package.
@@ -338,14 +341,14 @@ def parse_args() -> argparse.Namespace:
         "but a longer period means more paginated API requests.",
     )
     parser.add_argument("--rsi-period", type=int, default=14)
-    parser.add_argument("--rsi-entry", type=float, default=27.0)
+    parser.add_argument("--rsi-entry", type=float, default=28.0)
     parser.add_argument(
         "--rsi-exit",
         type=float,
-        default=30.0,
+        default=29.0,
         help="RSI level that closes an open position. Not in CLAUDE.md spec -- an assumption to tune.",
     )
-    parser.add_argument("--stop-loss-pct", type=float, default=4.5)
+    parser.add_argument("--stop-loss-pct", type=float, default=5.0)
     parser.add_argument("--position-size-r", type=float, default=0.5)
     parser.add_argument(
         "--enable-short",
@@ -363,7 +366,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--short-rsi-exit",
         type=float,
-        default=62.0,
+        default=65.0,
         help="Cover the short when RSI falls back to this (only used with --enable-short).",
     )
     parser.add_argument(
@@ -395,7 +398,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--range-max-distance-pct",
         type=float,
-        default=5.0,
+        default=2.5,
         help="Max %% distance from the range SMA allowed for an entry (only with --enable-range-filter).",
     )
     parser.add_argument("--initial-balance", type=float, default=10000.0)

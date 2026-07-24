@@ -3,20 +3,24 @@
 Single-variable tuning (see README.md) hit a local maximum at 68.5% win rate
 and couldn't clear it moving one lever at a time. This sweeps combinations of
 levers together, fetching the data once and re-running the (fast, local,
-no-network) simulation for every combination in the grid. A win-rate-focused
-run of this search found the confirmed baseline in CLAUDE.md (2026-07-24):
-71.5% win rate, +0.18% return, Sharpe +0.06 on BTC-USD 1h/730d.
+no-network) simulation for every combination in the grid.
 
-Manual sweeping of --enable-range-filter (only trade when price is within
-X% of a 200-bar SMA -- i.e. filter OUT strong trends, since RSI mean
-reversion works best in range-bound conditions) then found a big single
-improvement: Sharpe 0.06 -> 0.68 at 2% distance / 200-bar SMA -- more than
-10x, though still short of Success (Sharpe >= 1.2, return >= +5%/30d). This
-grid always enables both --enable-short and --enable-range-filter (range_ma
-fixed at 200, confirmed best against 100 and 300 by hand) and sweeps the
-RSI/stop parameters together with the range distance, since combining
-levers has outperformed one-at-a-time tuning every time in this project so
-far -- edit the *_GRID constants to widen or shift further.
+A joint search combining --enable-short with --enable-range-filter (only
+trade when price is within X% of a 200-bar SMA -- i.e. filter OUT strong
+trends, since RSI mean reversion works best range-bound) found the confirmed
+baseline in CLAUDE.md (2026-07-24): 79.8% win rate, +1.72% return, Sharpe
++1.53, max drawdown -0.42% on BTC-USD 1h/730d --
+    --rsi-entry 28 --rsi-exit 29 --stop-loss-pct 5.0
+    --enable-short --short-rsi-entry 78 --short-rsi-exit 65
+    --enable-range-filter --range-ma-period 200 --range-max-distance-pct 2.5
+Sharpe and drawdown now clear CLAUDE.md's Success thresholds, but 30d return
+(+0.37% best) is far short of +5%/30d -- with only ~89 trades over 730 days
+and 0.5R risk per trade, this is a very safe configuration but structurally
+capped on absolute return (see CLAUDE.md for the full note; getting all
+three Success conditions at once likely needs more frequent trading or
+larger sizing, not just more threshold tuning). This grid is centered on
+that baseline for further tuning -- edit the *_GRID constants to widen or
+shift further.
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -35,13 +39,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0]
-RSI_ENTRY_GRID = [26, 27, 28]
-RSI_EXIT_GRID = [29, 30, 31]
-SHORT_RSI_ENTRY_GRID = [75, 78, 80]
-SHORT_RSI_EXIT_GRID = [60, 62, 65]
+STOP_LOSS_PCT_GRID = [4.5, 5.0, 5.5]
+RSI_ENTRY_GRID = [27, 28, 29]
+RSI_EXIT_GRID = [28, 29, 30]
+SHORT_RSI_ENTRY_GRID = [76, 78, 80]
+SHORT_RSI_EXIT_GRID = [62, 65, 68]
 RSI_PERIOD_GRID = [12, 14]
-RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0]
+RANGE_MAX_DISTANCE_PCT_GRID = [2.0, 2.5, 3.0]
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand; not swept here
 
 SORT_KEYS = {

@@ -30,23 +30,35 @@ Sharpe < 1 Not Great
 Sharpe between 1 to 2 is Good
 Sharpe > 2 is Excellence
 
-Entry : rsi < 27
-Exit : rsi >= 30 (mean-reversion exit; not in original spec, added so a trade has a close condition)
-Stop : 4.5%
+Entry : rsi < 28
+Exit : rsi >= 29 (mean-reversion exit; not in original spec, added so a trade has a close condition)
+Stop : 5.0%
 Size : 0.5R
 RSI period : 14
 
+Range filter: only enter (long or short) when price is within 2.5% of its 200-bar SMA --
+i.e. skip strong trending conditions. RSI mean reversion tends to work best range-bound and
+worst in strong trends either direction; a trade-with-the-trend filter was tested and hurt
+results (see Backtest/README.md), this range filter is the opposite idea and helped a lot.
+
 Short (backtest-only -- Kraken spot has no native short selling, would need margin/futures):
 Entry : rsi > 78
-Exit : rsi <= 62
-Stop : 4.5% above entry
+Exit : rsi <= 65
+Stop : 5.0% above entry
 
 Baseline confirmed 2026-07-24, backtested on BTC-USD 1h, 730d (yfinance) via Backtest/grid_search.py:
-71.5% win rate, +0.18% return, Sharpe +0.06, max drawdown -2.01%, worst rolling 30d -0.84%.
-Clears all Failure conditions above (drawdown, 30d return, Sharpe). Does not yet meet Success
-(return >= +5%/30d, Sharpe >= 1.2) -- still to be improved.
+79.8% win rate, +1.72% return, Sharpe +1.53, max drawdown -0.42%, worst rolling 30d -0.30%,
+best rolling 30d +0.37%. Clears all Failure conditions and now Sharpe/drawdown clear Success
+too, but 30d return (+0.37% best) is far short of the +5%/30d Success bar -- with only ~89
+trades over 730 days and 0.5R risk per trade, this configuration is very safe (hence the high
+Sharpe) but structurally capped on absolute return. Getting all three Success conditions at
+once likely needs either more frequent trading or larger position sizing, not just more
+threshold tuning -- flagged for the project owner to decide before further amendments.
 
-Previous baseline (original spec, never cleared Failure): Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
+Previous baselines (kept for traceability):
+1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
+2. Win-rate-focused, cleared Failure only: Entry rsi<27, Exit rsi>=30, Stop 4.5%, Short entry
+   rsi>78 exit rsi<=62 stop 4.5%, no range filter -- 71.5% win rate, Sharpe +0.06.
 
 Improve the strategy after backtest the strategy with scientific approach, i.e., change one variable at a time and verify if the result is better with the particular variable change.
 
