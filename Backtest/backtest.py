@@ -9,11 +9,20 @@ a position on whichever comes first: the stop being hit, or RSI recovering to
 >= --rsi-exit (a mean-reversion exit, default 50). That default is an
 assumption, not a spec requirement -- tune it like any other variable.
 
+Data can come from either source:
+    --source yfinance (default): Yahoo Finance via the yfinance package.
+    --source ccxt: a crypto exchange's own public REST API via ccxt (free,
+        no API key needed for OHLCV data). Defaults to Kraken, the venue
+        LiveTradingBots/bot.py actually trades on, so backtest and live
+        signals see the same prices.
+
 Usage:
-    python backtest.py --symbol BTC-USD --interval 1h --period 730d
+    python backtest.py --source yfinance --symbol BTC-USD --interval 1h --period 730d
+    python backtest.py --source ccxt --exchange kraken --symbol BTC/USD --interval 1h --period 730d
 """
 import argparse
 
+import ccxt
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -27,6 +36,17 @@ INTERVAL_BARS_PER_YEAR = {
     "1d": 365,
 }
 
+TIMEFRAME_MS = {
+    "1m": 60_000,
+    "5m": 5 * 60_000,
+    "15m": 15 * 60_000,
+    "30m": 30 * 60_000,
+    "1h": 60 * 60_000,
+    "1d": 24 * 60 * 60_000,
+}
+
+DEFAULT_SYMBOL = {"yfinance": "BTC-USD", "ccxt": "BTC/USD"}
+
 
 def compute_rsi(closes: pd.Series, period: int) -> pd.Series:
     delta = closes.diff()
@@ -38,13 +58,58 @@ def compute_rsi(closes: pd.Series, period: int) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
-def fetch_data(symbol: str, interval: str, period: str) -> pd.DataFrame:
+def fetch_data_yfinance(symbol: str, interval: str, period: str) -> pd.DataFrame:
     df = yf.download(symbol, interval=interval, period=period, auto_adjust=True, progress=False)
     if df.empty:
         raise SystemExit(f"No data returned for {symbol} interval={interval} period={period}")
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
+
+
+def parse_period_to_days(period: str) -> int:
+    if period.endswith("d"):
+        return int(period[:-1])
+    return int(period)
+
+
+def fetch_data_ccxt(exchange_id: str, symbol: str, timeframe: str, period: str) -> pd.DataFrame:
+    if timeframe not in TIMEFRAME_MS:
+        raise SystemExit(f"--source ccxt does not support interval {timeframe!r}; choose one of {sorted(TIMEFRAME_MS)}")
+
+    exchange = getattr(ccxt, exchange_id)({"enableRateLimit": True})
+    timeframe_ms = TIMEFRAME_MS[timeframe]
+    since = exchange.milliseconds() - parse_period_to_days(period) * 24 * 60 * 60 * 1000
+
+    candles = []
+    max_requests = 500  # safety cap so a misbehaving exchange/pair can't loop forever
+    for _ in range(max_requests):
+        batch = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=720)
+        if not batch:
+            break
+        candles.extend(batch)
+        next_since = batch[-1][0] + timeframe_ms
+        if next_since <= since or next_since >= exchange.milliseconds():
+            break
+        since = next_since
+        if len(batch) < 720:
+            break
+
+    if not candles:
+        raise SystemExit(
+            f"No data returned for {symbol} on {exchange_id} timeframe={timeframe} period={period}"
+        )
+
+    df = pd.DataFrame(candles, columns=["timestamp", "Open", "High", "Low", "Close", "Volume"])
+    df = df.drop_duplicates(subset="timestamp").sort_values("timestamp")
+    df.index = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    return df.drop(columns=["timestamp"])
+
+
+def fetch_data(args: argparse.Namespace) -> pd.DataFrame:
+    if args.source == "yfinance":
+        return fetch_data_yfinance(args.symbol, args.interval, args.period)
+    return fetch_data_ccxt(args.exchange, args.symbol, args.interval, args.period)
 
 
 def simulate(
@@ -150,14 +215,28 @@ def compute_metrics(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Backtest the CLAUDE.md RSI mean-reversion strategy via yfinance.")
-    parser.add_argument("--symbol", default="BTC-USD")
+    parser = argparse.ArgumentParser(description="Backtest the CLAUDE.md RSI mean-reversion strategy.")
+    parser.add_argument(
+        "--source",
+        default="yfinance",
+        choices=["yfinance", "ccxt"],
+        help="Data source. 'yfinance' (default) hits Yahoo Finance. 'ccxt' hits a crypto "
+        "exchange's own free public API (see --exchange) -- no key needed for OHLCV data, "
+        "and it matches the venue bot.py actually trades on.",
+    )
+    parser.add_argument(
+        "--exchange",
+        default="kraken",
+        help="ccxt exchange id, only used when --source ccxt (default: kraken, same as bot.py).",
+    )
+    parser.add_argument("--symbol", default=None, help="Defaults to BTC-USD for yfinance, BTC/USD for ccxt.")
     parser.add_argument("--interval", default="1h", choices=sorted(INTERVAL_BARS_PER_YEAR))
     parser.add_argument(
         "--period",
         default="730d",
-        help="yfinance lookback window (e.g. 730d, 60d, max). Yahoo caps intraday history: "
-        "1h ~730d, 1m ~7d.",
+        help="Lookback window as e.g. 730d, 60d (or 'max' for --source yfinance only). "
+        "Yahoo caps intraday history: 1h ~730d, 1m ~7d. ccxt exchanges are not capped this way "
+        "but a longer period means more paginated API requests.",
     )
     parser.add_argument("--rsi-period", type=int, default=14)
     parser.add_argument("--rsi-entry", type=float, default=25.0)
@@ -171,13 +250,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--position-size-r", type=float, default=0.5)
     parser.add_argument("--initial-balance", type=float, default=10000.0)
     parser.add_argument("--csv-out", default=None, help="optional path to write the equity curve as CSV")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.symbol is None:
+        args.symbol = DEFAULT_SYMBOL[args.source]
+    return args
 
 
 def main() -> None:
     args = parse_args()
 
-    df = fetch_data(args.symbol, args.interval, args.period)
+    df = fetch_data(args)
     result = simulate(
         df,
         args.rsi_period,
@@ -191,6 +273,8 @@ def main() -> None:
         result["equity"], result["trades"], args.initial_balance, INTERVAL_BARS_PER_YEAR[args.interval]
     )
 
+    source_label = args.source if args.source == "yfinance" else f"ccxt/{args.exchange}"
+    print(f"Source:              {source_label}")
     print(f"Symbol:              {args.symbol}")
     print(f"Interval / Period:   {args.interval} / {args.period}")
     print(f"Bars:                {len(df)}")
