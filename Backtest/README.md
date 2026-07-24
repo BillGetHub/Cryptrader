@@ -33,6 +33,19 @@ has no native short selling; that would require a margin/futures account with
 liquidation risk and funding costs this harness doesn't model. Don't treat a
 short-enabled result as ready for live trading.
 
+`--enable-trend-filter` (off by default) is the first lever that isn't just an RSI
+threshold: it only allows a long entry when price is above the `--trend-ma-period`
+(default 200) simple moving average, and a short entry only below it. Every RSI
+band combination tuned so far (single-variable and grid search) traded RSI extremes
+with no sense of the broader trend -- Sharpe never exceeded ~0.2 no matter how the
+thresholds moved, which is why this is worth testing before doing more threshold
+tuning:
+
+```bash
+python backtest.py --enable-short --enable-trend-filter --trend-ma-period 200
+python backtest.py --enable-short --enable-trend-filter --trend-ma-period 500
+```
+
 ## Install
 
 ```bash
@@ -74,6 +87,8 @@ thresholds:
 | `--enable-short` | off | backtest-only, see caveat above; part of the confirmed baseline when on |
 | `--short-rsi-entry` | `78` | short when RSI rises above this (only with `--enable-short`) |
 | `--short-rsi-exit` | `62` | cover when RSI falls back to this (only with `--enable-short`) |
+| `--enable-trend-filter` | off | longs only above the trend SMA, shorts only below it |
+| `--trend-ma-period` | `200` | SMA period in bars (only with `--enable-trend-filter`) |
 | `--initial-balance` | `10000` | |
 | `--csv-out` | none | optional path to dump the equity curve |
 

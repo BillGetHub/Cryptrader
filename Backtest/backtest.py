@@ -126,10 +126,17 @@ def simulate(
     enable_short: bool = False,
     short_rsi_entry: float = 75.0,
     short_rsi_exit: float = 65.0,
+    enable_trend_filter: bool = False,
+    trend_ma_period: int = 200,
 ) -> dict:
     """Long entries fire on RSI < rsi_entry, exit on RSI >= rsi_exit (or stop below entry).
     Short entries (opt-in) fire on RSI > short_rsi_entry, exit on RSI <= short_rsi_exit
     (or stop above entry). Independent bands per side, one position open at a time.
+
+    enable_trend_filter (opt-in) requires the trend to agree with the trade direction:
+    longs only fire when close > trend_ma_period-bar SMA (uptrend), shorts only when
+    close < that SMA (downtrend). Every RSI band tested so far trades RSI extremes with
+    no sense of the broader trend; this is the first structurally different lever.
 
     Uses raw numpy arrays instead of DataFrame.iloc in the per-bar loop -- .iloc lookups
     dominate runtime when this is called hundreds of times in grid_search.py.
@@ -140,6 +147,11 @@ def simulate(
     closes = df["Close"].to_numpy(dtype=np.float64)
     rsis = rsi_series.to_numpy(dtype=np.float64)
     n = len(closes)
+
+    if enable_trend_filter:
+        trend_ma = df["Close"].rolling(trend_ma_period).mean().to_numpy(dtype=np.float64)
+    else:
+        trend_ma = None
 
     balance = initial_balance
     equity = np.empty(n, dtype=np.float64)
@@ -184,10 +196,16 @@ def simulate(
                 direction = None
 
         if direction is None and not np.isnan(r):
+            trend_ok_long, trend_ok_short = True, True
+            if enable_trend_filter:
+                ma = trend_ma[i]
+                trend_ok_long = not np.isnan(ma) and close > ma
+                trend_ok_short = not np.isnan(ma) and close < ma
+
             new_direction = None
-            if r < rsi_entry:
+            if r < rsi_entry and trend_ok_long:
                 new_direction = "long"
-            elif enable_short and r > short_rsi_entry:
+            elif enable_short and r > short_rsi_entry and trend_ok_short:
                 new_direction = "short"
 
             if new_direction is not None:
@@ -328,6 +346,19 @@ def parse_args() -> argparse.Namespace:
         default=62.0,
         help="Cover the short when RSI falls back to this (only used with --enable-short).",
     )
+    parser.add_argument(
+        "--enable-trend-filter",
+        action="store_true",
+        help="Only take longs when price is above the --trend-ma-period SMA (uptrend), and "
+        "shorts only below it (downtrend). Off by default -- every RSI band in this project's "
+        "history so far has traded RSI extremes with no sense of the broader trend.",
+    )
+    parser.add_argument(
+        "--trend-ma-period",
+        type=int,
+        default=200,
+        help="SMA period (in bars) for --enable-trend-filter.",
+    )
     parser.add_argument("--initial-balance", type=float, default=10000.0)
     parser.add_argument("--csv-out", default=None, help="optional path to write the equity curve as CSV")
     args = parser.parse_args()
@@ -351,6 +382,8 @@ def main() -> None:
         enable_short=args.enable_short,
         short_rsi_entry=args.short_rsi_entry,
         short_rsi_exit=args.short_rsi_exit,
+        enable_trend_filter=args.enable_trend_filter,
+        trend_ma_period=args.trend_ma_period,
     )
     metrics = compute_metrics(
         result["equity"], result["trades"], args.initial_balance, INTERVAL_BARS_PER_YEAR[args.interval]
@@ -365,6 +398,8 @@ def main() -> None:
     if args.enable_short:
         print(f"RSI short entry/exit: >{args.short_rsi_entry} / <={args.short_rsi_exit}")
     print(f"Stop / Size:         {args.stop_loss_pct}% / {args.position_size_r}R")
+    if args.enable_trend_filter:
+        print(f"Trend filter:        on, {args.trend_ma_period}-bar SMA")
     print()
     if args.enable_short:
         print(f"Trades:              {metrics['num_trades']} (long {metrics['num_long_trades']}, short {metrics['num_short_trades']})")
