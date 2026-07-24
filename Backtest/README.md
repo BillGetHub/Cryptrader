@@ -82,6 +82,34 @@ python backtest.py --rsi-entry 20   # vs. baseline --rsi-entry 25
 
 Per CLAUDE.md, confirm with the project owner before adopting a new baseline.
 
+## Joint grid search
+
+One-variable-at-a-time tuning can get stuck at a local maximum -- moving any
+single lever from that point makes things worse, even though a *combination*
+of moves might not. `grid_search.py` fetches the data once, then re-runs the
+(fast, local, no-network) simulation for every combination in a parameter grid
+centered on the local optimum found by hand:
+
+```bash
+python grid_search.py --symbol BTC-USD --interval 1h --period 730d
+python grid_search.py --source ccxt --exchange kraken --symbol BTC/USD --interval 1h --period 730d --csv-out results.csv
+```
+
+It prints how many combinations clear a 70% win rate and the top results
+ranked by win rate (Sharpe as tiebreaker). Edit the `*_GRID` constants at the
+top of `grid_search.py` to widen, narrow, or shift the search -- the default
+grid (~486 combinations, ~10-15s on 730 days of hourly data) covers:
+`--stop-loss-pct`, `--rsi-entry`, `--rsi-exit`, `--short-rsi-entry`,
+`--short-rsi-exit`, `--rsi-period`, always with `--enable-short` on. Entry/exit
+bands that would overlap (e.g. `--rsi-entry` >= `--rsi-exit`, which causes
+whipsaw trades -- see the "known trap" below) are skipped automatically.
+
+**Known trap:** the long entry threshold must stay below the exit threshold
+(and the short entry must stay above the short exit). If they cross, a
+position can open and then immediately satisfy the exit condition on the next
+bar, producing a flood of near-instant whipsaw trades that look like more
+data but are actually noise -- trade count spikes and every metric gets worse.
+
 ## Known limitation in this environment
 
 Neither Yahoo Finance nor Kraken's public API is reachable through this sandbox's

@@ -127,91 +127,103 @@ def simulate(
     """Long entries fire on RSI < rsi_entry, exit on RSI >= rsi_exit (or stop below entry).
     Short entries (opt-in) fire on RSI > short_rsi_entry, exit on RSI <= short_rsi_exit
     (or stop above entry). Independent bands per side, one position open at a time.
+
+    Uses raw numpy arrays instead of DataFrame.iloc in the per-bar loop -- .iloc lookups
+    dominate runtime when this is called hundreds of times in grid_search.py.
     """
-    rsi = compute_rsi(df["Close"], rsi_period)
+    rsi_series = compute_rsi(df["Close"], rsi_period)
+    highs = df["High"].to_numpy(dtype=np.float64)
+    lows = df["Low"].to_numpy(dtype=np.float64)
+    closes = df["Close"].to_numpy(dtype=np.float64)
+    rsis = rsi_series.to_numpy(dtype=np.float64)
+    n = len(closes)
 
     balance = initial_balance
-    position = None  # dict: direction, entry_time, entry_price, stop_price, size, risk_amount
-    equity_curve = []
-    trades = []
+    equity = np.empty(n, dtype=np.float64)
 
-    for i in range(len(df)):
-        ts = df.index[i]
-        high, low, close = df["High"].iloc[i], df["Low"].iloc[i], df["Close"].iloc[i]
-        r = rsi.iloc[i]
+    direction = None  # None, "long", "short"
+    entry_price = stop_price = size = risk_amount = 0.0
+    entry_idx = -1
+    trades = []  # rows: direction, entry_idx, exit_idx, entry_price, exit_price, size, pnl, r_multiple, reason
 
-        if position is not None:
+    for i in range(n):
+        high, low, close, r = highs[i], lows[i], closes[i], rsis[i]
+
+        if direction is not None:
             exit_price, reason = None, None
-            if position["direction"] == "long":
-                if low <= position["stop_price"]:
-                    exit_price, reason = position["stop_price"], "stop"
+            if direction == "long":
+                if low <= stop_price:
+                    exit_price, reason = stop_price, "stop"
                 elif not np.isnan(r) and r >= rsi_exit:
                     exit_price, reason = close, "rsi_exit"
             else:
-                if high >= position["stop_price"]:
-                    exit_price, reason = position["stop_price"], "stop"
+                if high >= stop_price:
+                    exit_price, reason = stop_price, "stop"
                 elif not np.isnan(r) and r <= short_rsi_exit:
                     exit_price, reason = close, "rsi_exit"
 
             if exit_price is not None:
-                if position["direction"] == "long":
-                    pnl = position["size"] * (exit_price - position["entry_price"])
-                else:
-                    pnl = position["size"] * (position["entry_price"] - exit_price)
+                pnl = size * (exit_price - entry_price) if direction == "long" else size * (entry_price - exit_price)
                 balance += pnl
                 trades.append(
-                    {
-                        "direction": position["direction"],
-                        "entry_time": position["entry_time"],
-                        "exit_time": ts,
-                        "entry_price": position["entry_price"],
-                        "exit_price": exit_price,
-                        "size": position["size"],
-                        "pnl": pnl,
-                        "r_multiple": pnl / position["risk_amount"] if position["risk_amount"] else 0.0,
-                        "reason": reason,
-                    }
+                    (
+                        direction,
+                        entry_idx,
+                        i,
+                        entry_price,
+                        exit_price,
+                        size,
+                        pnl,
+                        pnl / risk_amount if risk_amount else 0.0,
+                        reason,
+                    )
                 )
-                position = None
+                direction = None
 
-        if position is None and not np.isnan(r):
-            direction = None
+        if direction is None and not np.isnan(r):
+            new_direction = None
             if r < rsi_entry:
-                direction = "long"
+                new_direction = "long"
             elif enable_short and r > short_rsi_entry:
-                direction = "short"
+                new_direction = "short"
 
-            if direction is not None:
-                entry_price = close
-                if direction == "long":
-                    stop_price = entry_price * (1 - stop_loss_pct / 100)
-                    stop_distance = entry_price - stop_price
+            if new_direction is not None:
+                candidate_entry_price = close
+                if new_direction == "long":
+                    candidate_stop_price = candidate_entry_price * (1 - stop_loss_pct / 100)
+                    stop_distance = candidate_entry_price - candidate_stop_price
                 else:
-                    stop_price = entry_price * (1 + stop_loss_pct / 100)
-                    stop_distance = stop_price - entry_price
-                risk_amount = balance * position_size_r / 100
-                size = risk_amount / stop_distance if stop_distance > 0 else 0.0
-                if size > 0:
-                    position = {
-                        "direction": direction,
-                        "entry_time": ts,
-                        "entry_price": entry_price,
-                        "stop_price": stop_price,
-                        "size": size,
-                        "risk_amount": risk_amount,
-                    }
+                    candidate_stop_price = candidate_entry_price * (1 + stop_loss_pct / 100)
+                    stop_distance = candidate_stop_price - candidate_entry_price
+                candidate_risk_amount = balance * position_size_r / 100
+                candidate_size = candidate_risk_amount / stop_distance if stop_distance > 0 else 0.0
+                if candidate_size > 0:
+                    direction = new_direction
+                    entry_price = candidate_entry_price
+                    stop_price = candidate_stop_price
+                    size = candidate_size
+                    risk_amount = candidate_risk_amount
+                    entry_idx = i
 
-        if position is not None:
-            if position["direction"] == "long":
-                open_pnl = position["size"] * (close - position["entry_price"])
-            else:
-                open_pnl = position["size"] * (position["entry_price"] - close)
+        if direction is not None:
+            open_pnl = size * (close - entry_price) if direction == "long" else size * (entry_price - close)
         else:
             open_pnl = 0.0
-        equity_curve.append({"time": ts, "equity": balance + open_pnl})
+        equity[i] = balance + open_pnl
 
-    equity_df = pd.DataFrame(equity_curve).set_index("time")
-    trades_df = pd.DataFrame(trades)
+    equity_df = pd.DataFrame({"equity": equity}, index=df.index)
+
+    columns = ["direction", "entry_time", "exit_time", "entry_price", "exit_price", "size", "pnl", "r_multiple", "reason"]
+    if trades:
+        raw = pd.DataFrame(
+            trades, columns=["direction", "entry_idx", "exit_idx", "entry_price", "exit_price", "size", "pnl", "r_multiple", "reason"]
+        )
+        raw["entry_time"] = df.index[raw["entry_idx"]]
+        raw["exit_time"] = df.index[raw["exit_idx"]]
+        trades_df = raw[columns]
+    else:
+        trades_df = pd.DataFrame(columns=columns)
+
     return {"equity": equity_df, "trades": trades_df, "final_balance": balance}
 
 
