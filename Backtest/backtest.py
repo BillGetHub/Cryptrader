@@ -120,11 +120,18 @@ def simulate(
     stop_loss_pct: float,
     position_size_r: float,
     initial_balance: float,
+    enable_short: bool = False,
+    short_rsi_entry: float = 75.0,
+    short_rsi_exit: float = 65.0,
 ) -> dict:
+    """Long entries fire on RSI < rsi_entry, exit on RSI >= rsi_exit (or stop below entry).
+    Short entries (opt-in) fire on RSI > short_rsi_entry, exit on RSI <= short_rsi_exit
+    (or stop above entry). Independent bands per side, one position open at a time.
+    """
     rsi = compute_rsi(df["Close"], rsi_period)
 
     balance = initial_balance
-    position = None  # dict: entry_time, entry_price, stop_price, size, risk_amount
+    position = None  # dict: direction, entry_time, entry_price, stop_price, size, risk_amount
     equity_curve = []
     trades = []
 
@@ -135,16 +142,26 @@ def simulate(
 
         if position is not None:
             exit_price, reason = None, None
-            if low <= position["stop_price"]:
-                exit_price, reason = position["stop_price"], "stop"
-            elif not np.isnan(r) and r >= rsi_exit:
-                exit_price, reason = close, "rsi_exit"
+            if position["direction"] == "long":
+                if low <= position["stop_price"]:
+                    exit_price, reason = position["stop_price"], "stop"
+                elif not np.isnan(r) and r >= rsi_exit:
+                    exit_price, reason = close, "rsi_exit"
+            else:
+                if high >= position["stop_price"]:
+                    exit_price, reason = position["stop_price"], "stop"
+                elif not np.isnan(r) and r <= short_rsi_exit:
+                    exit_price, reason = close, "rsi_exit"
 
             if exit_price is not None:
-                pnl = position["size"] * (exit_price - position["entry_price"])
+                if position["direction"] == "long":
+                    pnl = position["size"] * (exit_price - position["entry_price"])
+                else:
+                    pnl = position["size"] * (position["entry_price"] - exit_price)
                 balance += pnl
                 trades.append(
                     {
+                        "direction": position["direction"],
                         "entry_time": position["entry_time"],
                         "exit_time": ts,
                         "entry_price": position["entry_price"],
@@ -157,22 +174,40 @@ def simulate(
                 )
                 position = None
 
-        if position is None and not np.isnan(r) and r < rsi_entry:
-            entry_price = close
-            stop_price = entry_price * (1 - stop_loss_pct / 100)
-            stop_distance = entry_price - stop_price
-            risk_amount = balance * position_size_r / 100
-            size = risk_amount / stop_distance if stop_distance > 0 else 0.0
-            if size > 0:
-                position = {
-                    "entry_time": ts,
-                    "entry_price": entry_price,
-                    "stop_price": stop_price,
-                    "size": size,
-                    "risk_amount": risk_amount,
-                }
+        if position is None and not np.isnan(r):
+            direction = None
+            if r < rsi_entry:
+                direction = "long"
+            elif enable_short and r > short_rsi_entry:
+                direction = "short"
 
-        open_pnl = position["size"] * (close - position["entry_price"]) if position else 0.0
+            if direction is not None:
+                entry_price = close
+                if direction == "long":
+                    stop_price = entry_price * (1 - stop_loss_pct / 100)
+                    stop_distance = entry_price - stop_price
+                else:
+                    stop_price = entry_price * (1 + stop_loss_pct / 100)
+                    stop_distance = stop_price - entry_price
+                risk_amount = balance * position_size_r / 100
+                size = risk_amount / stop_distance if stop_distance > 0 else 0.0
+                if size > 0:
+                    position = {
+                        "direction": direction,
+                        "entry_time": ts,
+                        "entry_price": entry_price,
+                        "stop_price": stop_price,
+                        "size": size,
+                        "risk_amount": risk_amount,
+                    }
+
+        if position is not None:
+            if position["direction"] == "long":
+                open_pnl = position["size"] * (close - position["entry_price"])
+            else:
+                open_pnl = position["size"] * (position["entry_price"] - close)
+        else:
+            open_pnl = 0.0
         equity_curve.append({"time": ts, "equity": balance + open_pnl})
 
     equity_df = pd.DataFrame(equity_curve).set_index("time")
@@ -203,12 +238,23 @@ def compute_metrics(
     num_trades = len(trades_df)
     win_rate_pct = (trades_df["pnl"] > 0).mean() * 100 if num_trades else 0.0
 
+    long_trades_df = trades_df[trades_df["direction"] == "long"] if num_trades else trades_df
+    short_trades_df = trades_df[trades_df["direction"] == "short"] if num_trades else trades_df
+    num_long_trades = len(long_trades_df)
+    num_short_trades = len(short_trades_df)
+    long_win_rate_pct = (long_trades_df["pnl"] > 0).mean() * 100 if num_long_trades else float("nan")
+    short_win_rate_pct = (short_trades_df["pnl"] > 0).mean() * 100 if num_short_trades else float("nan")
+
     return {
         "total_return_pct": total_return_pct,
         "sharpe": sharpe,
         "max_drawdown_pct": max_drawdown_pct,
         "num_trades": num_trades,
         "win_rate_pct": win_rate_pct,
+        "num_long_trades": num_long_trades,
+        "num_short_trades": num_short_trades,
+        "long_win_rate_pct": long_win_rate_pct,
+        "short_win_rate_pct": short_win_rate_pct,
         "worst_30d_return_pct": rolling_30d_return.min() if not rolling_30d_return.empty else float("nan"),
         "best_30d_return_pct": rolling_30d_return.max() if not rolling_30d_return.empty else float("nan"),
     }
@@ -248,6 +294,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--stop-loss-pct", type=float, default=1.4)
     parser.add_argument("--position-size-r", type=float, default=0.5)
+    parser.add_argument(
+        "--enable-short",
+        action="store_true",
+        help="Backtest-only: also take short entries. NOTE: Kraken spot (what bot.py trades) "
+        "has no native short selling -- this would need a margin/futures account with "
+        "liquidation risk and funding costs not modeled here. Off by default.",
+    )
+    parser.add_argument(
+        "--short-rsi-entry",
+        type=float,
+        default=75.0,
+        help="Short entry when RSI rises above this (only used with --enable-short).",
+    )
+    parser.add_argument(
+        "--short-rsi-exit",
+        type=float,
+        default=65.0,
+        help="Cover the short when RSI falls back to this (only used with --enable-short).",
+    )
     parser.add_argument("--initial-balance", type=float, default=10000.0)
     parser.add_argument("--csv-out", default=None, help="optional path to write the equity curve as CSV")
     args = parser.parse_args()
@@ -268,6 +333,9 @@ def main() -> None:
         args.stop_loss_pct,
         args.position_size_r,
         args.initial_balance,
+        enable_short=args.enable_short,
+        short_rsi_entry=args.short_rsi_entry,
+        short_rsi_exit=args.short_rsi_exit,
     )
     metrics = compute_metrics(
         result["equity"], result["trades"], args.initial_balance, INTERVAL_BARS_PER_YEAR[args.interval]
@@ -278,11 +346,20 @@ def main() -> None:
     print(f"Symbol:              {args.symbol}")
     print(f"Interval / Period:   {args.interval} / {args.period}")
     print(f"Bars:                {len(df)}")
-    print(f"RSI entry/exit:      <{args.rsi_entry} / >={args.rsi_exit}")
+    print(f"RSI long entry/exit: <{args.rsi_entry} / >={args.rsi_exit}")
+    if args.enable_short:
+        print(f"RSI short entry/exit: >{args.short_rsi_entry} / <={args.short_rsi_exit}")
     print(f"Stop / Size:         {args.stop_loss_pct}% / {args.position_size_r}R")
     print()
-    print(f"Trades:              {metrics['num_trades']}")
-    print(f"Win rate:            {metrics['win_rate_pct']:.1f}%")
+    if args.enable_short:
+        print(f"Trades:              {metrics['num_trades']} (long {metrics['num_long_trades']}, short {metrics['num_short_trades']})")
+        print(
+            f"Win rate:            {metrics['win_rate_pct']:.1f}% "
+            f"(long {metrics['long_win_rate_pct']:.1f}%, short {metrics['short_win_rate_pct']:.1f}%)"
+        )
+    else:
+        print(f"Trades:              {metrics['num_trades']}")
+        print(f"Win rate:            {metrics['win_rate_pct']:.1f}%")
     print(f"Total return:        {metrics['total_return_pct']:.2f}%")
     print(f"Sharpe (annualized): {metrics['sharpe']:.2f}")
     print(f"Max drawdown:        {metrics['max_drawdown_pct']:.2f}%")

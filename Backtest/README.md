@@ -20,6 +20,13 @@ Two free data sources are supported, picked with `--source`:
   the CLAUDE.md spec, it's a default assumption needed to close a trade. Tune it
   with `--rsi-exit` like any other variable.
 
+By default only the long side above is simulated, matching CLAUDE.md and `bot.py`.
+`--enable-short` (off by default) adds an independent short leg with its own RSI
+bands (`--short-rsi-entry` / `--short-rsi-exit`) -- **backtest-only**. Kraken spot,
+the venue `bot.py` trades on, has no native short selling; that would require a
+margin/futures account with liquidation risk and funding costs this harness
+doesn't model. Don't treat a short-enabled result as ready for live trading.
+
 ## Install
 
 ```bash
@@ -58,6 +65,9 @@ thresholds:
 | `--rsi-exit` | `50` | mean-reversion exit, not in spec |
 | `--stop-loss-pct` | `1.4` | |
 | `--position-size-r` | `0.5` | |
+| `--enable-short` | off | backtest-only, see caveat above |
+| `--short-rsi-entry` | `75` | short when RSI rises above this (only with `--enable-short`) |
+| `--short-rsi-exit` | `65` | cover when RSI falls back to this (only with `--enable-short`) |
 | `--initial-balance` | `10000` | |
 | `--csv-out` | none | optional path to dump the equity curve |
 
