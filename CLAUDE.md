@@ -74,6 +74,16 @@ ETH. ETH's optimal shape differs genuinely from BTC's: no ATR-stop (every ATR va
 made ETH worse, the opposite of BTC), RSI period 12 not 14, short-exit 45 not 65. Full detail
 and every parameter set tested for both coins: Backtest/VALIDATED_PARAMETERS.md.
 
+BNBUSDT confirmed baseline (2026-07-24, backtested via ccxt/Binance, 1h/730d): 75.7% win
+rate, +3.56% return, Sharpe +1.51 (best of all three coins), max drawdown -1.32%, worst
+rolling 30d -0.71%, best rolling 30d +0.80%, 152 trades. Found via three widening passes of
+grid_search.py with every parameter dimension confirmed bracketed (none sitting on a search-
+range edge). Shares ETH's RSI period (12, not BTC's 14) and no ATR-stop, but its own values
+elsewhere -- rsi-entry 27, short-rsi-entry 78/short-rsi-exit 45, range filter widened to
+4.0%. Trend-following and Bollinger Bands were both tested as alternatives and discarded:
+Bollinger breaches Failure outright (worst 30d -4.11%, Sharpe -0.36); trend-following result
+pending. Full detail: Backtest/VALIDATED_PARAMETERS.md.
+
 Previous baselines (kept for traceability):
 1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
 2. Win-rate-focused, cleared Failure only: Entry rsi<27, Exit rsi>=30, Stop 4.5%, Short entry

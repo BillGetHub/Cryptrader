@@ -202,6 +202,59 @@ deeper drawdowns) -- reinforces that the range-filtered RSI mean-reversion
 approach fits this market's actual behavior, rather than being an accident
 of BTC-specific tuning.
 
+# BNBUSDT
+
+## Confirmed baseline (2026-07-24)
+
+Tuned independently via three successive widening passes of `grid_search.py`
+(first pass hit the edge on rsi_entry, rsi_exit, rsi_period, and
+range_max_distance_pct; second pass already cleared Sharpe/drawdown Success
+but hit the edge again on stop_loss_pct, rsi_exit, short_rsi_entry, and
+short_rsi_exit; third pass widened those further and fixed rsi_period at its
+twice-confirmed peak of 12). Every parameter dimension is now confirmed
+bracketed -- none sit on a search-range edge. Does **not** use ATR-stop
+(not swept for BNB, matching ETH's finding rather than BTC's).
+
+```
+--rsi-entry 27 --rsi-exit 29 --rsi-period 12 --stop-loss-pct 5.0
+--enable-short --short-rsi-entry 78 --short-rsi-exit 45
+--enable-range-filter --range-ma-period 200 --range-max-distance-pct 4.0
+```
+
+| Metric | Value | vs. threshold |
+|---|---|---|
+| Win rate | 75.7% | -- |
+| Trades | 152 | -- |
+| Total return (730d) | +3.56% | -- |
+| Sharpe | +1.51 | clears >=1.2 (best of all three coins: BTC 1.38, ETH 1.25, BNB 1.51) |
+| Max drawdown | -1.32% | clears <=8% |
+| Worst rolling 30d | -0.71% | safe (Failure line is -4%) |
+| Best rolling 30d | +0.80% | short of +5% target |
+
+Same shape of result as BTC's and ETH's: clears Sharpe and drawdown for
+Success, still short on the 30-day return leg. Fetched via
+`--source ccxt --exchange binance --symbol BNBUSDT` (genuine USDT pair, full
+730-day history).
+
+Shares ETH's RSI period (12, not BTC's 14) and absence of an ATR-stop, but
+its own values elsewhere -- rsi-entry 27 (vs BTC/ETH's 28), short-rsi-exit 45
+(matching ETH, not BTC's 65), range filter widened to 4.0% (vs BTC/ETH's
+3.0%/2.5%-3.0%). Confirms again that each coin needs its own tuning pass
+rather than reused parameters.
+
+### What was tried and discarded reaching this baseline
+- **Bollinger Bands** (`--bb-period 20 --bb-std-mult 2.0 --enable-short` on
+  Binance BNB/USDT): 685 trades, 63.6% win rate (long 67.0%, short 59.9%),
+  Sharpe -0.36, max drawdown -6.94%, **worst rolling 30d -4.11% -- breaches
+  the -4%/30d Failure line outright**, not just a soft Sharpe miss. The only
+  alternative-strategy test across all three coins to breach a hard Failure
+  threshold rather than just falling short of Success.
+- **Trend-following** (`--fast-ma-period 20 --slow-ma-period 50 --enable-short`
+  on Binance BNB/USDT): not yet run to completion -- command issued but
+  result not yet captured. Given trend-following breached 2-3 Failure
+  conditions on both BTC and ETH, expected to underperform here too, but
+  not confirmed.
+
 ## Tools to reproduce or extend any of this
 
 - `Backtest/backtest.py` -- the RSI+range-filter+ATR-stop strategy (single run)
