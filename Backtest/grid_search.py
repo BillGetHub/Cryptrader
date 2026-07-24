@@ -76,6 +76,17 @@ range_max_distance_pct (1.5, lower, several top rows). Pass 3 (this grid)
 widens all four further; fixing rsi_period and stop_loss_pct freed up enough
 runtime budget to widen generously in one pass rather than needing a pass 4.
 
+Pass 3 (2250 combos) held Sharpe at ~1.63 and confirmed rsi_entry=28,
+rsi_exit=29, and short_rsi_exit=50 as genuine interior peaks (each bracketed
+by neighbors that lost). But short_rsi_entry and range_max_distance_pct both
+hit an edge in the *wrong* direction from what pass 3 widened: the entire
+top 15 sat at short_rsi_entry=76 (the *upper* edge of pass 3's [68..76]
+range -- pass 2's "widen down" guess was backwards) and the top result sat
+at range_max_distance_pct=2.0 (the *upper* edge of pass 3's [0.75..2.0]
+range -- same mistake). Pass 4 (this grid) fixes everything else at its now
+twice-or-more-confirmed value and only sweeps these two, widening upward
+past where they got cut off.
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
@@ -94,12 +105,16 @@ import pandas as pd
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
 STOP_LOSS_PCT_GRID = [5.5]  # confirmed flat/non-critical across 5.0-6.0 in passes 1 and 2; fixed to save runtime
-RSI_ENTRY_GRID = [26, 27, 28, 29, 30, 31]  # widened up: pass 2 top result hit 28, the upper edge
-RSI_EXIT_GRID = [29, 30, 31, 32]  # widened slightly to stay valid as rsi_entry widens up
-SHORT_RSI_ENTRY_GRID = [68, 70, 72, 74, 76]  # widened down: pass 2 top result hit 76, the (shifted) lower edge
-SHORT_RSI_EXIT_GRID = [45, 50, 55, 60, 65]  # widened up: pass 2 top result hit 50, the upper edge
-RSI_PERIOD_GRID = [14]  # confirmed peak across both passes (12 worse in pass 1, 16/18 worse in pass 2); fixed to save runtime
-RANGE_MAX_DISTANCE_PCT_GRID = [0.75, 1.0, 1.25, 1.5, 2.0]  # widened down: pass 2 hit 1.5 heavily, several top rows at that edge
+RSI_ENTRY_GRID = [28]  # confirmed interior peak in pass 3 (26, 27, 29, 30, 31 all tested and lost); fixed
+RSI_EXIT_GRID = [29]  # confirmed interior peak in pass 3 (30, 31, 32 all tested and lost); fixed
+SHORT_RSI_ENTRY_GRID = [72, 74, 76, 78, 80, 82]  # pass 3's ENTIRE top 15 sat at 76 -- but that was the *upper*
+# edge of pass 3's [68..76] grid, meaning pass 2's widen-down guess was the wrong direction. Correcting: this
+# pass keeps 76 but widens up past it instead.
+SHORT_RSI_EXIT_GRID = [50]  # confirmed interior peak in pass 3 (45 and 55 both tested and lost); fixed
+RSI_PERIOD_GRID = [14]  # confirmed peak across passes 1-2 (12 worse, 16/18 worse); fixed to save runtime
+RANGE_MAX_DISTANCE_PCT_GRID = [2.0, 2.5, 3.0, 3.5, 4.0, 4.5]  # same correction: pass 3's top result sat at 2.0,
+# the *upper* edge of pass 3's [0.75..2.0] grid -- the down-widening in pass 3 was the wrong direction here too.
+# Keeps 2.0 and widens up past it.
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
