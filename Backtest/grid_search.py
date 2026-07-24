@@ -30,70 +30,32 @@ The *_GRID constants below are edited freely as tuning moves to new assets or
 regions -- they are a scratch workspace, not a record. BTC's, ETH's, and
 BNB's confirmed baselines are recorded permanently in CLAUDE.md and
 Backtest/VALIDATED_PARAMETERS.md regardless of what the grid currently
-contains (see VALIDATED_PARAMETERS.md for full per-coin detail). ETH's and
-BNB's tuning both found their optimum far from BTC's on short_rsi_exit (45
-vs BTC's 65) and rsi_period (12 vs BTC's 14) -- proof these are genuinely
-asset-specific levers, not just tuning noise.
+contains -- full per-coin tuning history, including every pass's edge-hits
+and corrections, is preserved there and in git history, not repeated here.
+Each coin found genuinely different optimal parameters: BTC settled on
+rsi_period=14 with ATR(10)x2.0; ETH and BNB both use rsi_period=12 with no
+ATR-stop; short_rsi_exit landed at 45-50 for all three (far from the
+original spec's untested assumptions); range_max_distance_pct varies from
+2.0% (BTC) to 4.0% (BNB). Strong evidence each new coin needs its own full
+pass through this process, not a copy of another coin's numbers.
 
-As of 2026-07-24 the grid is re-centered for a fresh BTC pass: the
-multi-asset portfolio test surfaced that BTC's confirmed baseline (tuned and
-validated only on Yahoo's BTC-USD) drops from Sharpe +1.38 to +0.59 when its
-exact parameters are re-run on genuine Binance BTCUSDT data -- no longer
-clearing the >=1.2 Success bar. BTC has never been tuned directly on
-Binance, unlike ETH and BNB. This pass searches a space centered on BTC's
-known Yahoo-tuned optimum (28/29/5.0/78/65/14/3.0) but wide enough either
-side to let Binance's genuinely different price data find its own optimum,
-the same way ETH's and BNB's grids started centered on a known region and
-then widened toward wherever the edge-hits pointed. Note this grid does not
-sweep --enable-atr-stop (matching how ETH/BNB were tuned) -- the plan is to
-find the best fixed-stop config here first, then test adding ATR-stop on
-top as a follow-up, mirroring exactly how the original Yahoo-data ATR-stop
-win was discovered (found after the fixed-stop baseline, not as part of the
-initial joint search).
-
-Pass 1 (7800 combos) hit the edge on four dimensions: rsi_entry (top result at
-26, the lower bound), short_rsi_entry (many top rows at 80, the upper bound),
-short_rsi_exit (the entire top 15 sat at 45, the lower bound -- the same
-value ETH and BNB both converged on independently), and range_max_distance_pct
-(2.5, the lower bound). rsi_period=14 beat 12 decisively (unlike ETH/BNB,
-where 12 won) but only two values were tested, so it's unclear if 14 is a
-peak or just the better of two options. stop_loss_pct was confirmed *not* a
-strong lever (near-flat Sharpe across 5.0-6.0). Pass 2 (this grid) widens the
-four edge-hit dimensions further, extends rsi_period upward past 14, and
-narrows rsi_exit/stop_loss_pct (neither showed an edge signal) to keep
-runtime bounded. 0/7800 combos cleared full CLAUDE.md Success in pass 1 --
-expected, matching the original Yahoo-data process where the fixed-stop pass
-never cleared full Success either (ATR-stop, tested as a follow-up afterward,
-was what got closest).
-
-Pass 2 (9000 combos) raised Sharpe from 1.30 to 1.64. rsi_period=14 now beat
-both 12 (pass 1) and 16/18 (pass 2) -- bracketed on both sides, confirmed a
-genuine peak, now fixed. stop_loss_pct stayed flat across 5.0-6.0 for a
-second pass -- confirmed non-critical, now fixed at 5.5 to save runtime.
-Four dimensions still hit an edge: rsi_entry (28, upper), short_rsi_entry (76,
-now the lower edge after the pass-2 shift), short_rsi_exit (50, upper), and
-range_max_distance_pct (1.5, lower, several top rows). Pass 3 (this grid)
-widens all four further; fixing rsi_period and stop_loss_pct freed up enough
-runtime budget to widen generously in one pass rather than needing a pass 4.
-
-Pass 3 (2250 combos) held Sharpe at ~1.63 and confirmed rsi_entry=28,
-rsi_exit=29, and short_rsi_exit=50 as genuine interior peaks (each bracketed
-by neighbors that lost). But short_rsi_entry and range_max_distance_pct both
-hit an edge in the *wrong* direction from what pass 3 widened: the entire
-top 15 sat at short_rsi_entry=76 (the *upper* edge of pass 3's [68..76]
-range -- pass 2's "widen down" guess was backwards) and the top result sat
-at range_max_distance_pct=2.0 (the *upper* edge of pass 3's [0.75..2.0]
-range -- same mistake). Pass 4 (this grid) fixes everything else at its now
-twice-or-more-confirmed value and only sweeps these two, widening upward
-past where they got cut off.
+As of 2026-07-24 the grid is re-centered for SOLUSDT's first pass -- a coin
+none of BTC/ETH/BNB's tuning has touched. Centered on the union of what's
+been found across the other three coins (rsi_entry 27-28, rsi_exit 29,
+short_rsi_entry 76-78, short_rsi_exit 45-50, rsi_period 12 or 14,
+range_max_distance_pct 2.0-4.0), but wide enough on each dimension to let
+SOL's own price data find genuinely different values -- the same way each
+prior coin's first pass started from a known region and widened toward
+wherever the edge-hits pointed. Does not sweep --enable-atr-stop (matching
+the established process) -- planned as a follow-up test once the fixed-stop
+optimum is found and fully bracketed.
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
 
 Usage:
-    python grid_search.py --symbol BTCUSDT --interval 1h --period 730d
-    python grid_search.py --source ccxt --exchange kraken --symbol BTCUSDT --interval 1h --period 730d
+    python grid_search.py --symbol SOLUSDT --source ccxt --exchange binance --interval 1h --period 730d
     python grid_search.py --sort-by sharpe --top-n 20
 """
 import argparse
@@ -104,17 +66,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [5.5]  # confirmed flat/non-critical across 5.0-6.0 in passes 1 and 2; fixed to save runtime
-RSI_ENTRY_GRID = [28]  # confirmed interior peak in pass 3 (26, 27, 29, 30, 31 all tested and lost); fixed
-RSI_EXIT_GRID = [29]  # confirmed interior peak in pass 3 (30, 31, 32 all tested and lost); fixed
-SHORT_RSI_ENTRY_GRID = [72, 74, 76, 78, 80, 82]  # pass 3's ENTIRE top 15 sat at 76 -- but that was the *upper*
-# edge of pass 3's [68..76] grid, meaning pass 2's widen-down guess was the wrong direction. Correcting: this
-# pass keeps 76 but widens up past it instead.
-SHORT_RSI_EXIT_GRID = [50]  # confirmed interior peak in pass 3 (45 and 55 both tested and lost); fixed
-RSI_PERIOD_GRID = [14]  # confirmed peak across passes 1-2 (12 worse, 16/18 worse); fixed to save runtime
-RANGE_MAX_DISTANCE_PCT_GRID = [2.0, 2.5, 3.0, 3.5, 4.0, 4.5]  # same correction: pass 3's top result sat at 2.0,
-# the *upper* edge of pass 3's [0.75..2.0] grid -- the down-widening in pass 3 was the wrong direction here too.
-# Keeps 2.0 and widens up past it.
+STOP_LOSS_PCT_GRID = [4.5, 5.0, 5.5, 6.0]  # spans BTC(5.5)/ETH(4.5)/BNB(5.0)'s confirmed values
+RSI_ENTRY_GRID = [26, 27, 28, 29]  # spans BTC/ETH(28) and BNB(27), widened a point either side
+RSI_EXIT_GRID = [28, 29, 30]  # all three coins confirmed 29; widened a point either side
+SHORT_RSI_ENTRY_GRID = [74, 76, 78, 80]  # spans BTC/ETH(76) and BNB(78), widened a point either side
+SHORT_RSI_EXIT_GRID = [40, 45, 50, 55]  # spans BTC(50) and ETH/BNB(45), widened a point either side
+RSI_PERIOD_GRID = [12, 14]  # BTC uses 14, ETH/BNB both use 12 -- genuinely unknown for SOL
+RANGE_MAX_DISTANCE_PCT_GRID = [2.0, 2.5, 3.0, 4.0]  # spans BTC(2.0) through BNB(4.0)
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
