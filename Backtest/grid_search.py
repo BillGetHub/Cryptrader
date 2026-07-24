@@ -62,6 +62,19 @@ reversion shape as well as BTC/ETH/BNB, or the optimum is genuinely further
 out than pass 1 reached, isn't yet answerable -- this pass should clarify
 which.
 
+Pass 2 (9216 combos) answered it: Sharpe rose from +0.15 to +1.07, and 6
+combos cleared 70% win rate (vs 0 in pass 1) -- SOL responds to this
+strategy, pass 1 just hadn't found where. Two regimes emerged: one pairing
+stop=6.5/rsi_period=12/short_rsi_entry=68/short_rsi_exit=45, the other
+stop=5.0/rsi_period=14/short_rsi_entry=70/short_rsi_exit=40 -- both stop
+extremes (5.0, 6.5) beat the interior (5.5, 6.0), an unusual bimodal
+pattern left as-is pending more data. range_max_distance_pct's ENTIRE top
+15 sat at 3.0 -- the *lower* edge of pass 2's [3.0..6.0] grid, meaning
+pass 2's widen-up guess was backwards (mirrors the exact mistake made on
+BTC's pass 3). rsi_entry (22) and short_rsi_entry (68) both still hit their
+lower edge even after widening. Pass 3 (this grid) corrects the
+range_max_distance_pct direction and widens the other two further down.
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
@@ -78,14 +91,16 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [5.0, 5.5, 6.0, 6.5]  # widened up: pass 1 never used 4.5, leaned toward 6.0
-RSI_ENTRY_GRID = [22, 23, 24, 25, 26, 27]  # widened down hard: pass 1's entire top 15 sat at 26, the lower edge
-RSI_EXIT_GRID = [28, 29, 30]  # pass 1: no edge signal; kept as-is
-SHORT_RSI_ENTRY_GRID = [68, 70, 72, 74]  # widened down: pass 1's ENTIRE top 15 sat at 74, the lower edge
-SHORT_RSI_EXIT_GRID = [30, 35, 40, 45]  # widened down: pass 1 leaned heavily toward 40, the lower edge
-RSI_PERIOD_GRID = [12, 14]  # pass 1: no clear winner between the two; kept as-is
-RANGE_MAX_DISTANCE_PCT_GRID = [3.0, 4.0, 5.0, 6.0]  # widened up: pass 1's 2.0 (lower edge) never appeared in
-# the top 15 at all, while 4.0 (upper edge) dominated -- dropping 2.0/2.5 entirely, widening up instead
+STOP_LOSS_PCT_GRID = [5.0, 5.5, 6.0, 6.5]  # pass 2: bimodal -- both edges (5.0, 6.5) won, interior didn't;
+# ambiguous direction, kept as-is for this pass
+RSI_ENTRY_GRID = [18, 19, 20, 21, 22]  # widened down further: pass 2's top result still hit 22, the lower edge
+RSI_EXIT_GRID = [28, 29, 30]  # pass 2: no edge signal; kept as-is
+SHORT_RSI_ENTRY_GRID = [62, 64, 66, 68]  # widened down further: pass 2's top result still hit 68, the lower edge
+SHORT_RSI_EXIT_GRID = [40, 45, 50, 55]  # widened up: pass 2's top result hit 45, the upper edge (in that regime)
+RSI_PERIOD_GRID = [12, 14]  # pass 2: no clear winner, two regimes emerged pairing differently with other levers; kept as-is
+RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0]  # CORRECTED direction: pass 2's ENTIRE top 15 sat at 3.0, the
+# *lower* edge of pass 2's [3.0..6.0] grid -- pass 2's widen-up guess was backwards (same mistake BTC's pass 3
+# made). Widening down instead.
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
