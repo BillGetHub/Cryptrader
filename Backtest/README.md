@@ -101,14 +101,18 @@ python grid_search.py --symbol BTC-USD --interval 1h --period 730d
 python grid_search.py --source ccxt --exchange kraken --symbol BTC/USD --interval 1h --period 730d --csv-out results.csv
 ```
 
-It prints how many combinations clear a 70% win rate and the top results
-ranked by win rate (Sharpe as tiebreaker). Edit the `*_GRID` constants at the
-top of `grid_search.py` to widen, narrow, or shift the search -- the default
-grid (~486 combinations, ~10-15s on 730 days of hourly data) covers:
-`--stop-loss-pct`, `--rsi-entry`, `--rsi-exit`, `--short-rsi-entry`,
-`--short-rsi-exit`, `--rsi-period`, always with `--enable-short` on. Entry/exit
-bands that would overlap (e.g. `--rsi-entry` >= `--rsi-exit`, which causes
-whipsaw trades -- see the "known trap" below) are skipped automatically.
+It prints how many combinations clear a 70% win rate, how many clear CLAUDE.md's
+Success thresholds (return >= +5%/30d, Sharpe >= 1.2, drawdown <= 8% -- using
+the actual rolling 30-day return, not the total-period return), and how many
+still hit a Failure condition, then the top results ranked by `--sort-by`
+(`win_rate`, `sharpe`, or `return`; default `sharpe`, since that's the current
+gap versus Success). Edit the `*_GRID` constants at the top of `grid_search.py`
+to widen, narrow, or shift the search -- the default grid (~3,072 combinations,
+~1-2 min on 730 days of hourly data) covers: `--stop-loss-pct`, `--rsi-entry`,
+`--rsi-exit`, `--short-rsi-entry`, `--short-rsi-exit`, `--rsi-period`, always
+with `--enable-short` on. Entry/exit bands that would overlap (e.g.
+`--rsi-entry` >= `--rsi-exit`, which causes whipsaw trades -- see the "known
+trap" below) are skipped automatically.
 
 **Known trap:** the long entry threshold must stay below the exit threshold
 (and the short entry must stay above the short exit). If they cross, a
