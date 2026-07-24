@@ -22,16 +22,16 @@ Two free data sources are supported, picked with `--source`:
   currently the only source that actually delivers it. A different ccxt
   exchange (e.g. Binance) might not have this limitation, untested here.
 
-Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24): 76.3% win
-rate, +1.75% return, Sharpe +1.31, max drawdown -0.42%, worst rolling 30d
--0.29%, best rolling 30d +0.38%, 114 trades on BTC-USD 1h/730d. Sharpe and
-drawdown now clear CLAUDE.md's Success thresholds, but 30d return (+0.38%
-best) is far short of +5%/30d -- even at 114 trades over 730 days with 0.5R
-risk per trade, this is a very safe configuration but structurally capped on
-absolute return. See CLAUDE.md for the full note.
+Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24): 74.0% win
+rate, +8.01% return, Sharpe +1.38, max drawdown -1.84%, worst rolling 30d
+-1.27%, best rolling 30d +2.40%, 131 trades on BTC-USD 1h/730d. Sharpe and
+drawdown clear CLAUDE.md's Success thresholds by a wide margin, but 30d
+return (+2.40% best) is still short of +5%/30d -- closer than any prior
+baseline, but not there yet. See CLAUDE.md for the full note.
 
 - Entry: RSI(14) < 28
-- Stop: 5.0% below entry
+- Stop: volatility-adjusted -- 2.0x ATR(21), not a fixed percentage (`--enable-atr-stop`,
+  part of the confirmed baseline; use `--stop-loss-pct` for a fixed-percentage stop instead)
 - Size: 0.5R (percent of account balance risked per trade)
 - Exit: stop hit, or RSI recovers to >= 29 (mean-reversion exit) -- **not** part of
   the original CLAUDE.md spec, it's an assumption needed to close a trade. Tune it
@@ -64,12 +64,17 @@ frequency -> +1.31 Sharpe, 114 trades vs 89). Not a smooth tradeoff: 4% and 5%
 distance both dropped Sharpe well below 1.2 (0.25 and 0.57), so 3% is a
 verified local sweet spot, not the start of a predictable curve.
 
-`--enable-atr-stop` (off by default) replaces the fixed `--stop-loss-pct` stop
-with one sized off recent volatility: stop distance = `--atr-multiplier` *
-ATR(`--atr-period`) at entry, instead of the same fixed percentage regardless
-of how calm or volatile the market currently is. A well-documented risk-
-management technique; not yet benchmarked against the fixed-percentage stop on
-real data.
+`--enable-atr-stop` (off by default, but part of the confirmed baseline when
+on) replaces the fixed `--stop-loss-pct` stop with one sized off recent
+volatility: stop distance = `--atr-multiplier` * ATR(`--atr-period`) at entry,
+instead of the same fixed percentage regardless of how calm or volatile the
+market currently is. **The single biggest improvement of the whole project**:
+tested against the fixed 5.0% stop on real data (2026-07-24) and roughly
+4.6x'd total return (+1.75% -> +8.01%) while also raising Sharpe (+1.31 ->
++1.38). Both ATR parameters were bracketed and confirmed as local peaks --
+`--atr-multiplier` 1.5 and 2.5 were both worse (Sharpe 1.14 and 0.99 vs 2.0's
+1.38); `--atr-period` 10 and 30 were both worse (Sharpe 1.21 and 1.16 vs 21's
+1.38).
 
 ## Install
 
@@ -117,8 +122,8 @@ thresholds:
 | `--enable-range-filter` | off | entries only within `--range-max-distance-pct` of the range SMA; part of the confirmed baseline when on |
 | `--range-ma-period` | `200` | SMA period in bars (only with `--enable-range-filter`) |
 | `--range-max-distance-pct` | `3.0` | max %% distance from the SMA allowed for an entry (only with `--enable-range-filter`) |
-| `--enable-atr-stop` | off | volatility-adjusted stop instead of the fixed `--stop-loss-pct` |
-| `--atr-period` | `14` | ATR period in bars (only with `--enable-atr-stop`) |
+| `--enable-atr-stop` | off | volatility-adjusted stop instead of the fixed `--stop-loss-pct`; part of the confirmed baseline when on |
+| `--atr-period` | `21` | ATR period in bars (only with `--enable-atr-stop`) |
 | `--atr-multiplier` | `2.0` | stop distance as a multiple of ATR (only with `--enable-atr-stop`) |
 | `--initial-balance` | `10000` | |
 | `--csv-out` | none | optional path to dump the equity curve |
@@ -171,18 +176,22 @@ data but are actually noise -- trade count spikes and every metric gets worse.
 ## Alternative strategies
 
 Three more scripts, built to test whether a genuinely different approach beats
-threshold-tuning the RSI signal further. None of these have been benchmarked
-against real data yet -- verified only on synthetic data (mechanics correct,
-no crashes, entries respect their own rules). Run them and compare their
-printed metrics against the RSI baseline above using the same CLAUDE.md
-Success/Failure thresholds.
+threshold-tuning the RSI signal further. **All three tested and discarded**
+(CLAUDE.md, 2026-07-24) -- none beat the RSI baseline, and two actively breach
+Failure conditions with default parameters. None have been tuned further
+beyond their defaults; a tuned version of any of them might do better, but
+none showed enough promise on a first real-data pass to justify the effort
+the way the ATR-stop refinement did.
 
 **`trend_strategy.py`** -- classic fast/slow moving-average crossover trend
 following. Genuinely complementary to the RSI approach rather than a variant
 of it: the range filter above specifically *excludes* trending periods, so
 this strategy trades exactly the conditions RSI mean reversion sits out.
 Long while the fast SMA is above the slow SMA, short (opt-in) while below,
-exit on trend flip or stop hit.
+exit on trend flip or stop hit. **Result at defaults (20/50 SMA):** 405
+trades, 36.8% win rate, -1.68% return, Sharpe -0.16, max drawdown -9.73% --
+breaches two Failure conditions. Likely whipsawing badly on this data; a much
+slower MA pair might behave differently but wasn't tested.
 
 ```bash
 python trend_strategy.py --symbol BTC-USD --interval 1h --period 730d
@@ -194,7 +203,9 @@ math family to RSI for the same "buy oversold, sell overbought" idea: entries
 are measured in standard deviations from a rolling average instead of RSI's
 momentum oscillator. Long when price closes below the lower band, short
 (opt-in) above the upper band, exit on reversion to the middle band or stop
-hit.
+hit. **Result at defaults (20-period, 2 std dev):** 669 trades, 63.7% win
+rate, -2.21% return, Sharpe -0.30, max drawdown -5.18% -- breaches the Sharpe
+Failure condition (drawdown stays safe).
 
 ```bash
 python bollinger_strategy.py --symbol BTC-USD --interval 1h --period 730d
@@ -210,7 +221,14 @@ raising any single position's risk. Note the portfolio Sharpe is computed on
 *daily* returns (different pairs' fetched bars don't align hour-to-hour), so
 it isn't directly comparable to `backtest.py`'s hourly Sharpe -- compare each
 symbol's own per-asset Sharpe in the printed breakdown instead for an apples-
-to-apples check against the single-asset baseline.
+to-apples check against the single-asset baseline. **Result** (BTC/ETH/SOL,
+BTC-tuned parameters reused unchanged): BTC alone matched the single-asset
+baseline exactly (Sharpe +1.31), but ETH (-0.67) and SOL (-1.62) both did
+badly with those same numbers, dragging the combined portfolio to Sharpe -0.51
+-- a curve-fitting lesson, not evidence diversification itself doesn't work:
+the parameters were extensively grid-searched specifically for BTC's
+behavior, so there was no reason to expect them to transfer unchanged.
+A fair test would need each asset's own tuned parameters, not attempted here.
 
 ```bash
 python multi_asset.py --interval 1h --period 730d

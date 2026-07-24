@@ -6,15 +6,19 @@ Size:  position_size_r percent of account balance risked per trade
 
 CLAUDE.md defines an entry and a stop but no exit target; --rsi-exit closes a
 position on RSI recovering back up, or the stop being hit. Defaults below are
-the confirmed baseline (CLAUDE.md, 2026-07-24): 76.3% win rate, +1.75% return,
-Sharpe +1.31, max drawdown -0.42%, worst rolling 30d -0.29%, best rolling 30d
-+0.38%, 114 trades on BTC-USD 1h/730d. --enable-short and --enable-range-filter
-reproduce the short leg and range filter that baseline includes; without them
-you get a smaller subset. Sharpe and drawdown now clear CLAUDE.md's Success
-thresholds, but 30d return (+0.38% best) is far short of +5%/30d -- even at
-114 trades over 730 days with 0.5R risk per trade, this is a very safe
-configuration but structurally capped on absolute return. See CLAUDE.md for
-the full note.
+the confirmed baseline (CLAUDE.md, 2026-07-24): 74.0% win rate, +8.01% return,
+Sharpe +1.38, max drawdown -1.84%, worst rolling 30d -1.27%, best rolling 30d
++2.40%, 131 trades on BTC-USD 1h/730d. --enable-short, --enable-range-filter,
+and --enable-atr-stop reproduce the short leg, range filter, and volatility-
+adjusted stop that baseline includes; without them you get a smaller subset
+(note: with --enable-atr-stop, --stop-loss-pct is ignored -- the stop is
+sized from ATR instead). Sharpe and drawdown clear CLAUDE.md's Success
+thresholds by a wide margin, but 30d return (+2.40% best) is still short of
++5%/30d -- closer than any prior baseline (replacing the fixed stop with an
+ATR-based one roughly 4.6x'd return on its own), but not there yet. See
+CLAUDE.md for the full note, including why two alternative strategies (trend-
+following, Bollinger Bands) and naive multi-asset diversification all
+underperformed this baseline.
 
 Data can come from either source:
     --source yfinance (default): Yahoo Finance via the yfinance package.
@@ -437,7 +441,7 @@ def parse_args() -> argparse.Namespace:
         help="Replace the fixed --stop-loss-pct stop with a volatility-adjusted one: "
         "stop distance = --atr-multiplier * ATR(--atr-period) at entry. Off by default.",
     )
-    parser.add_argument("--atr-period", type=int, default=14, help="ATR period in bars (only with --enable-atr-stop).")
+    parser.add_argument("--atr-period", type=int, default=21, help="ATR period in bars (only with --enable-atr-stop).")
     parser.add_argument(
         "--atr-multiplier",
         type=float,

@@ -32,7 +32,7 @@ Sharpe > 2 is Excellence
 
 Entry : rsi < 28
 Exit : rsi >= 29 (mean-reversion exit; not in original spec, added so a trade has a close condition)
-Stop : 5.0%
+Stop : volatility-adjusted -- 2.0x ATR(21), not a fixed percentage (see note below)
 Size : 0.5R
 RSI period : 14
 
@@ -44,20 +44,27 @@ results (see Backtest/README.md), this range filter is the opposite idea and hel
 Short (backtest-only -- Kraken spot has no native short selling, would need margin/futures):
 Entry : rsi > 78
 Exit : rsi <= 65
-Stop : 5.0% above entry
+Stop : same 2.0x ATR(21), applied above entry
 
 Baseline confirmed 2026-07-24, backtested on BTC-USD 1h, 730d (yfinance) via Backtest/backtest.py:
-76.3% win rate, +1.75% return, Sharpe +1.31, max drawdown -0.42%, worst rolling 30d -0.29%,
-best rolling 30d +0.38%, 114 trades. Clears all Failure conditions and Sharpe/drawdown clear
-Success too, but 30d return (+0.38% best) is still far short of the +5%/30d Success bar --
-even at 114 trades over 730 days with 0.5R risk per trade, this configuration is very safe
-(hence the high Sharpe) but structurally capped on absolute return. Getting all three Success
-conditions at once likely needs either more frequent trading or larger position sizing, not
-just more threshold tuning -- flagged for the project owner to decide before further
-amendments. Range distance was widened from 2.5% specifically to trade a little Sharpe for
-more frequency (2.5% gave Sharpe +1.53 but only 89 trades); 4% and 5% were also tested and
-both dropped Sharpe well below the 1.2 bar (0.25 and 0.57), so 3% is not a monotonic
-midpoint -- it's a locally verified sweet spot, not the start of a smooth curve.
+74.0% win rate, +8.01% return, Sharpe +1.38, max drawdown -1.84%, worst rolling 30d -1.27%,
+best rolling 30d +2.40%, 131 trades. The stop changed from a fixed 5.0% to a volatility-
+adjusted one (2.0x the 21-period Average True Range) -- the stop distance now widens or
+narrows with how volatile the market currently is, instead of using the same percentage
+regardless of conditions. This alone roughly 4.6x'd total return (+1.75% -> +8.01%) and
+raised Sharpe (+1.31 -> +1.38) versus the prior fixed-stop baseline, the single biggest
+improvement of any change made this session. Both ATR parameters were bracketed and
+confirmed as local peaks: multiplier 1.5 and 2.5 were both worse (Sharpe 1.14 and 0.99 vs
+2.0's 1.38); period 10 and 30 were both worse (Sharpe 1.21 and 1.16 vs 21's 1.38). Clears
+all Failure conditions and now Sharpe/drawdown clear Success by a wider margin than before,
+but 30d return (+2.40% best) is still short of the +5%/30d Success bar -- closer than any
+prior baseline, but still short. Two structurally different strategies (fast/slow moving-
+average trend-following, and Bollinger Band mean reversion) and a naive multi-asset
+diversification (same parameters reused unchanged on ETH/SOL) were also tested and all
+underperformed this baseline, some badly enough to breach Failure conditions -- see
+Backtest/README.md for details. The ATR-stop win suggests the remaining gap to full Success
+is more likely closable through refining risk mechanics (like this) than through a wholesale
+different signal.
 
 Previous baselines (kept for traceability):
 1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
@@ -65,6 +72,8 @@ Previous baselines (kept for traceability):
    rsi>78 exit rsi<=62 stop 4.5%, no range filter -- 71.5% win rate, Sharpe +0.06.
 3. First Success-clearing baseline, same as above but range filter at 2.5% instead of 3.0% --
    79.8% win rate, Sharpe +1.53, only 89 trades.
+4. Fixed 5.0% stop version of the current entry/exit/range-filter numbers -- 76.3% win rate,
+   +1.75% return, Sharpe +1.31, max drawdown -0.42%, 114 trades.
 
 Improve the strategy after backtest the strategy with scientific approach, i.e., change one variable at a time and verify if the result is better with the particular variable change.
 
