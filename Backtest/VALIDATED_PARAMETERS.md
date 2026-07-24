@@ -146,5 +146,9 @@ justify the effort.
 
 All support `--source ccxt --exchange <id> --symbol <PAIR>` for other coins,
 though note Kraken's ccxt pagination is capped at ~30 days of history (see
-`Backtest/README.md` "Known gotcha") -- use `--source yfinance` with a ticker
-like `ETH-USD` or `SOL-USD` for full-history backtests on other coins.
+`Backtest/README.md` "Known gotcha") -- use `--source yfinance` for full-
+history backtests on other coins. As of 2026-07-24 the default/recommended
+symbol format is a bare pair like `ETHUSDT` or `SOLUSDT` (auto-normalized per
+source internally) rather than `BTC-USD`/`BTC/USD` used to produce the
+historical results above -- see `Backtest/README.md` for the normalization
+details and the (unverified against live data) yfinance USDT-ticker caveat.

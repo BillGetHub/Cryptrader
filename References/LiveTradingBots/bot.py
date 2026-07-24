@@ -13,11 +13,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+QUOTE_CURRENCIES = ("USDT", "USDC", "USD", "EUR", "GBP")
+
+
+def normalize_symbol(symbol: str) -> str:
+    """Accept a bare pair like BTCUSDT and insert ccxt's required '/' before
+    the quote currency (-> BTC/USDT). Symbols that already contain '/' are
+    returned unchanged.
+    """
+    if "/" in symbol:
+        return symbol
+    for quote in QUOTE_CURRENCIES:
+        if symbol.endswith(quote) and len(symbol) > len(quote):
+            return f"{symbol[:-len(quote)]}/{quote}"
+    return symbol
+
+
 EXCHANGE = os.environ.get("EXCHANGE", "kraken")
 API_KEY = os.environ.get("API_KEY", "")
 API_SECRET = os.environ.get("API_SECRET", "")
 
-SYMBOL = os.environ.get("SYMBOL", "BTC/USD")
+SYMBOL = normalize_symbol(os.environ.get("SYMBOL", "BTCUSDT"))
 TIMEFRAME = os.environ.get("TIMEFRAME", "1h")
 
 RSI_PERIOD = int(os.environ.get("RSI_PERIOD", "14"))

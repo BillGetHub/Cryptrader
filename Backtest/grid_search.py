@@ -32,8 +32,8 @@ Note: total_return_pct is the return over the whole fetched period, not a
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
 
 Usage:
-    python grid_search.py --symbol BTC-USD --interval 1h --period 730d
-    python grid_search.py --source ccxt --exchange kraken --symbol BTC/USD --interval 1h --period 730d
+    python grid_search.py --symbol BTCUSDT --interval 1h --period 730d
+    python grid_search.py --source ccxt --exchange kraken --symbol BTCUSDT --interval 1h --period 730d
     python grid_search.py --sort-by sharpe --top-n 20
 """
 import argparse

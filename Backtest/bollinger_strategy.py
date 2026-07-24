@@ -16,7 +16,7 @@ rather than RSI's momentum oscillator), worth comparing directly against
 the RSI strategy's results on the same data.
 
 Usage:
-    python bollinger_strategy.py --symbol BTC-USD --interval 1h --period 730d
+    python bollinger_strategy.py --symbol BTCUSDT --interval 1h --period 730d
     python bollinger_strategy.py --bb-period 20 --bb-std-mult 2.0 --enable-short
 """
 import argparse

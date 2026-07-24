@@ -22,6 +22,14 @@ Two free data sources are supported, picked with `--source`:
   currently the only source that actually delivers it. A different ccxt
   exchange (e.g. Binance) might not have this limitation, untested here.
 
+`--symbol` defaults to a bare pair like `BTCUSDT` -- it's auto-normalized to
+whatever separator each source needs (`BTC-USDT` for yfinance, `BTC/USDT` for
+ccxt) before being used, so the same bare symbol works with either `--source`.
+A symbol that already contains `/` or `-` is left untouched. Note: yfinance's
+support for `BTC-USDT` specifically (vs. the fiat `BTC-USD`) hasn't been
+confirmed against live data in this session -- if it 404s or returns empty,
+try `--symbol BTC-USD` explicitly as a fallback for that source.
+
 Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24): 74.0% win
 rate, +8.01% return, Sharpe +1.38, max drawdown -1.84%, worst rolling 30d
 -1.27%, best rolling 30d +2.40%, 131 trades on BTC-USD 1h/730d. Sharpe and
@@ -87,10 +95,10 @@ pip install -r requirements.txt
 
 ```bash
 # Yahoo Finance (default)
-python backtest.py --symbol BTC-USD --interval 1h --period 730d
+python backtest.py --symbol BTCUSDT --interval 1h --period 730d
 
 # Kraken via ccxt -- free, no API key, matches the live bot's venue
-python backtest.py --source ccxt --exchange kraken --symbol BTC/USD --interval 1h --period 730d
+python backtest.py --source ccxt --exchange kraken --symbol BTCUSDT --interval 1h --period 730d
 ```
 
 Output reports total return, annualized Sharpe, max drawdown, win rate, and the
@@ -106,7 +114,7 @@ thresholds:
 |---|---|---|
 | `--source` | `yfinance` | `yfinance` or `ccxt` |
 | `--exchange` | `kraken` | ccxt exchange id, only used with `--source ccxt` (any exchange ccxt supports) |
-| `--symbol` | `BTC-USD` (yfinance) / `BTC/USD` (ccxt) | Yahoo ticker or ccxt unified symbol, depending on `--source` |
+| `--symbol` | `BTCUSDT` | Bare pair auto-normalized per source (`BTC-USDT` for yfinance, `BTC/USDT` for ccxt); a symbol already containing `/` or `-` is used as-is |
 | `--interval` | `1h` | `1m`,`5m`,`15m`,`30m`,`1h`,`1d` |
 | `--period` | `730d` | Yahoo caps intraday history: `1h` ~730 days, `1m` ~7 days (`1d` has no cap). ccxt has no such cap, but longer periods mean more paginated requests. |
 | `--rsi-period` | `14` | |
@@ -148,8 +156,8 @@ of moves might not. `grid_search.py` fetches the data once, then re-runs the
 centered on the local optimum found by hand:
 
 ```bash
-python grid_search.py --symbol BTC-USD --interval 1h --period 730d
-python grid_search.py --source ccxt --exchange kraken --symbol BTC/USD --interval 1h --period 730d --csv-out results.csv
+python grid_search.py --symbol BTCUSDT --interval 1h --period 730d
+python grid_search.py --source ccxt --exchange kraken --symbol BTCUSDT --interval 1h --period 730d --csv-out results.csv
 ```
 
 It prints how many combinations clear a 70% win rate, how many clear CLAUDE.md's
@@ -194,7 +202,7 @@ breaches two Failure conditions. Likely whipsawing badly on this data; a much
 slower MA pair might behave differently but wasn't tested.
 
 ```bash
-python trend_strategy.py --symbol BTC-USD --interval 1h --period 730d
+python trend_strategy.py --symbol BTCUSDT --interval 1h --period 730d
 python trend_strategy.py --fast-ma-period 20 --slow-ma-period 50 --enable-short
 ```
 
@@ -208,7 +216,7 @@ rate, -2.21% return, Sharpe -0.30, max drawdown -5.18% -- breaches the Sharpe
 Failure condition (drawdown stays safe).
 
 ```bash
-python bollinger_strategy.py --symbol BTC-USD --interval 1h --period 730d
+python bollinger_strategy.py --symbol BTCUSDT --interval 1h --period 730d
 python bollinger_strategy.py --bb-period 20 --bb-std-mult 2.0 --enable-short
 ```
 
@@ -232,7 +240,7 @@ A fair test would need each asset's own tuned parameters, not attempted here.
 
 ```bash
 python multi_asset.py --interval 1h --period 730d
-python multi_asset.py --source ccxt --exchange kraken --symbols "BTC/USD,ETH/USD,SOL/USD" --enable-short --enable-range-filter
+python multi_asset.py --source ccxt --exchange kraken --symbols "BTCUSDT,ETHUSDT,SOLUSDT" --enable-short --enable-range-filter
 ```
 
 ## Known limitation in this environment

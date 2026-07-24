@@ -17,7 +17,7 @@ parameters by default; override with the same flags as backtest.py.
 
 Usage:
     python multi_asset.py --interval 1h --period 730d
-    python multi_asset.py --source ccxt --exchange kraken --symbols "BTC/USD,ETH/USD,SOL/USD"
+    python multi_asset.py --source ccxt --exchange kraken --symbols "BTCUSDT,ETHUSDT,SOLUSDT"
 """
 import argparse
 
@@ -33,8 +33,8 @@ from backtest import (
 )
 
 DEFAULT_SYMBOLS = {
-    "yfinance": "BTC-USD,ETH-USD,SOL-USD",
-    "ccxt": "BTC/USD,ETH/USD,SOL/USD",
+    "yfinance": "BTCUSDT,ETHUSDT,SOLUSDT",
+    "ccxt": "BTCUSDT,ETHUSDT,SOLUSDT",
 }
 
 
@@ -42,7 +42,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Multi-asset portfolio backtest of the RSI+range-filter strategy.")
     parser.add_argument("--source", default="yfinance", choices=["yfinance", "ccxt"])
     parser.add_argument("--exchange", default="kraken")
-    parser.add_argument("--symbols", default=None, help="Comma-separated symbols. Defaults to BTC/ETH/SOL for the chosen source.")
+    parser.add_argument(
+        "--symbols",
+        default=None,
+        help="Comma-separated symbols (bare pairs like BTCUSDT are auto-normalized per source). "
+        "Defaults to BTC/ETH/SOL.",
+    )
     parser.add_argument("--interval", default="1h", choices=sorted(INTERVAL_BARS_PER_YEAR))
     parser.add_argument("--period", default="730d")
     parser.add_argument("--rsi-period", type=int, default=14)

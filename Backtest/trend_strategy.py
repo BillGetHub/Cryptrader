@@ -15,7 +15,7 @@ Rule:
     MAs are warmed up (or flat, if shorts are disabled and the trend is down).
 
 Usage:
-    python trend_strategy.py --symbol BTC-USD --interval 1h --period 730d
+    python trend_strategy.py --symbol BTCUSDT --interval 1h --period 730d
     python trend_strategy.py --fast-ma-period 20 --slow-ma-period 50 --enable-short
 """
 import argparse

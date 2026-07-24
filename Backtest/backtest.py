@@ -28,8 +28,8 @@ Data can come from either source:
         signals see the same prices.
 
 Usage:
-    python backtest.py --source yfinance --symbol BTC-USD --interval 1h --period 730d
-    python backtest.py --source ccxt --exchange kraken --symbol BTC/USD --interval 1h --period 730d
+    python backtest.py --source yfinance --symbol BTCUSDT --interval 1h --period 730d
+    python backtest.py --source ccxt --exchange kraken --symbol BTCUSDT --interval 1h --period 730d
 """
 import argparse
 
@@ -56,7 +56,23 @@ TIMEFRAME_MS = {
     "1d": 24 * 60 * 60_000,
 }
 
-DEFAULT_SYMBOL = {"yfinance": "BTC-USD", "ccxt": "BTC/USD"}
+DEFAULT_SYMBOL = {"yfinance": "BTCUSDT", "ccxt": "BTCUSDT"}
+
+QUOTE_CURRENCIES = ("USDT", "USDC", "USD", "EUR", "GBP")
+
+
+def normalize_symbol(symbol: str, separator: str) -> str:
+    """Accept a bare pair like BTCUSDT and insert the given separator before
+    the quote currency -- e.g. normalize_symbol("BTCUSDT", "/") -> "BTC/USDT"
+    for ccxt, normalize_symbol("BTCUSDT", "-") -> "BTC-USDT" for yfinance.
+    Symbols that already contain a separator are returned unchanged.
+    """
+    if "/" in symbol or "-" in symbol:
+        return symbol
+    for quote in QUOTE_CURRENCIES:
+        if symbol.endswith(quote) and len(symbol) > len(quote):
+            return f"{symbol[:-len(quote)]}{separator}{quote}"
+    return symbol
 
 
 def compute_rsi(closes: pd.Series, period: int) -> pd.Series:
@@ -78,6 +94,7 @@ def compute_atr(df: pd.DataFrame, period: int) -> pd.Series:
 
 
 def fetch_data_yfinance(symbol: str, interval: str, period: str) -> pd.DataFrame:
+    symbol = normalize_symbol(symbol, "-")
     df = yf.download(symbol, interval=interval, period=period, auto_adjust=True, progress=False)
     if df.empty:
         raise SystemExit(f"No data returned for {symbol} interval={interval} period={period}")
@@ -93,6 +110,7 @@ def parse_period_to_days(period: str) -> int:
 
 
 def fetch_data_ccxt(exchange_id: str, symbol: str, timeframe: str, period: str) -> pd.DataFrame:
+    symbol = normalize_symbol(symbol, "/")
     if timeframe not in TIMEFRAME_MS:
         raise SystemExit(f"--source ccxt does not support interval {timeframe!r}; choose one of {sorted(TIMEFRAME_MS)}")
 
@@ -365,7 +383,12 @@ def parse_args() -> argparse.Namespace:
         default="kraken",
         help="ccxt exchange id, only used when --source ccxt (default: kraken, same as bot.py).",
     )
-    parser.add_argument("--symbol", default=None, help="Defaults to BTC-USD for yfinance, BTC/USD for ccxt.")
+    parser.add_argument(
+        "--symbol",
+        default=None,
+        help="Defaults to BTCUSDT (bare pair, auto-normalized per source: BTC-USDT for "
+        "yfinance, BTC/USDT for ccxt). A symbol with '/' or '-' already in it is used as-is.",
+    )
     parser.add_argument("--interval", default="1h", choices=sorted(INTERVAL_BARS_PER_YEAR))
     parser.add_argument(
         "--period",
