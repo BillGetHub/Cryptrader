@@ -27,15 +27,16 @@ more frequent trading still or larger sizing, not just more threshold
 tuning).
 
 The *_GRID constants below are edited freely as tuning moves to new assets or
-regions -- they are a scratch workspace, not a record. BTC's confirmed
-baseline above (which also uses --enable-atr-stop, not swept here) is
-recorded permanently in CLAUDE.md and Backtest/VALIDATED_PARAMETERS.md
-regardless of what the grid currently contains. As of 2026-07-24 the grid is
-narrowed/shifted for ETHUSDT exploration (via --source ccxt --exchange
-binance, since Kraken's ccxt pagination can't reach 730 days and yfinance has
-no ETH-USDT ticker) -- ETH's joint search landed on the lower edge of
-stop_loss_pct, short_rsi_entry, short_rsi_exit, and range_max_distance_pct,
-so this widens/shifts each downward from BTC's ranges to test past that edge.
+regions -- they are a scratch workspace, not a record. BTC's and ETH's
+confirmed baselines are recorded permanently in CLAUDE.md and
+Backtest/VALIDATED_PARAMETERS.md regardless of what the grid currently
+contains (see VALIDATED_PARAMETERS.md for full per-coin detail, including
+why BTC uses --enable-atr-stop, not swept here, and ETH does not). ETH's
+tuning found its optimum far from BTC's on short_rsi_exit (45 vs 65) --
+proof this is a genuinely asset-specific lever, not just tuning noise. As of
+2026-07-24 the grid is widened back out to cover the union of both coins'
+known optima (plus margin) as a neutral starting point for tuning a new
+coin, e.g. BNBUSDT via --source ccxt --exchange binance.
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -54,13 +55,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [3.0, 3.5, 4.0, 4.5]
+STOP_LOSS_PCT_GRID = [3.5, 4.0, 4.5, 5.0]
 RSI_ENTRY_GRID = [27, 28]
 RSI_EXIT_GRID = [29, 30]
-SHORT_RSI_ENTRY_GRID = [70, 72, 74, 76]
-SHORT_RSI_EXIT_GRID = [54, 57, 60, 62]
-RSI_PERIOD_GRID = [12]  # confirmed peak for ETH (bracketed against 10 and 14 by hand); narrowed to save runtime
-RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5]
+SHORT_RSI_ENTRY_GRID = [74, 76, 78, 80]
+SHORT_RSI_EXIT_GRID = [45, 50, 55, 60, 65]  # wide: BTC's optimum (65) and ETH's (45) are far apart
+RSI_PERIOD_GRID = [12, 14]  # BTC's optimum (14) and ETH's (12); widened back out for a new coin
+RANGE_MAX_DISTANCE_PCT_GRID = [2.5, 3.0]
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
