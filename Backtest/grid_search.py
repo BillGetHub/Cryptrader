@@ -34,11 +34,13 @@ contains (see VALIDATED_PARAMETERS.md for full per-coin detail, including
 why BTC uses --enable-atr-stop, not swept here, and ETH does not). ETH's
 tuning found its optimum far from BTC's on short_rsi_exit (45 vs 65) --
 proof this is a genuinely asset-specific lever, not just tuning noise. As of
-2026-07-24 the grid is narrowed/widened for BNBUSDT: its first pass (grid
-centered on the BTC/ETH union) hit the edge on rsi_entry, rsi_exit,
-rsi_period, and range_max_distance_pct, so those widen further; stop_loss_pct,
-short_rsi_entry, and short_rsi_exit landed interior for BNB and are narrowed
-back down around those confirmed values to keep runtime reasonable.
+2026-07-24 the grid has gone through two widening passes for BNBUSDT: the
+first (grid centered on the BTC/ETH union) hit the edge on rsi_entry,
+rsi_exit, rsi_period, and range_max_distance_pct; the second (after
+narrowing those and widening further) already cleared Sharpe/drawdown
+Success at Sharpe +1.51, but then hit the edge again on stop_loss_pct,
+rsi_exit, short_rsi_entry, and short_rsi_exit -- this third pass widens
+those further while fixing rsi_period at its now twice-confirmed peak (12).
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -57,13 +59,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0]  # 4.5 confirmed interior for BNB; narrowed to save runtime
-RSI_ENTRY_GRID = [25, 26, 27, 28]  # widened down: BNB's first pass hit 27, the lower edge
-RSI_EXIT_GRID = [29, 30, 31, 32]  # widened up: BNB's first pass hit 30, the upper edge
-SHORT_RSI_ENTRY_GRID = [74, 76, 78]  # 76 confirmed interior for BNB; narrowed to save runtime
-SHORT_RSI_EXIT_GRID = [45, 50, 55]  # 50 confirmed interior for BNB; narrowed to save runtime
-RSI_PERIOD_GRID = [10, 12]  # BNB's first pass hit 12, the lower edge (consistent with ETH); 14 dropped as unlikely
-RANGE_MAX_DISTANCE_PCT_GRID = [3.0, 3.5, 4.0]  # widened up: BNB's first pass hit 3.0, the upper edge
+STOP_LOSS_PCT_GRID = [4.5, 5.0, 5.5, 6.0]  # widened up: BNB's 2nd pass hit 5.0, the upper edge
+RSI_ENTRY_GRID = [26, 27, 28]  # 27 confirmed interior for BNB in the 2nd pass; narrowed to save runtime
+RSI_EXIT_GRID = [28, 29, 30]  # widened down: BNB's 2nd pass hit 29, the lower edge
+SHORT_RSI_ENTRY_GRID = [78, 80, 82]  # widened up: BNB's 2nd pass hit 78, the upper edge
+SHORT_RSI_EXIT_GRID = [35, 40, 45]  # widened down: BNB's 2nd pass hit 45, the lower edge
+RSI_PERIOD_GRID = [12]  # confirmed peak for BNB across both passes (10 and 14 both worse); fixed to save runtime
+RANGE_MAX_DISTANCE_PCT_GRID = [4.0, 4.5, 5.0]  # widened up: BNB's 2nd pass hit 4.0, the upper edge
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
