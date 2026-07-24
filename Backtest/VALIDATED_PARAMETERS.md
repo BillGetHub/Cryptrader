@@ -87,6 +87,26 @@ superseded the last as the project's official CLAUDE.md baseline.
 got to the return target. Replacing the fixed stop with a volatility-adjusted
 one (this change alone) roughly 4.6x'd return over the prior baseline.
 
+### Data-source caveat: same parameters on genuine Binance BTCUSDT
+
+This baseline was tuned and confirmed exclusively on Yahoo Finance's
+`BTC-USD` fiat pair. Re-running the identical parameters on genuine
+`BTCUSDT` via `--source ccxt --exchange binance` (found incidentally during
+the 2026-07-24 multi-asset portfolio test, see the "Multi-asset portfolio"
+section below) gives meaningfully weaker results: 69.5% win rate (vs 74.0%),
++3.23% return (vs +8.01%), **Sharpe +0.59 (vs +1.38 -- no longer clears the
+>=1.2 Success bar**, though still positive so doesn't breach Failure), max
+drawdown -3.16% (vs -1.84%), same 131 trades (a coincidental exact match
+despite genuinely different underlying price data). Worst/best rolling 30d
+wasn't captured by this particular test run (multi_asset.py's per-asset
+summary doesn't compute it).
+
+ETH and BNB were both tuned directly on Binance data from the start (see
+their sections below), so neither has this exposure. BTC has never been
+re-tuned on Binance data -- whether its parameters can be re-bracketed there
+to recover Sharpe, the way ETH/BNB were tuned fresh on Binance, is an open
+question not yet attempted.
+
 ### Prior baseline -- fixed 5.0% stop
 ```
 --rsi-entry 28 --rsi-exit 29 --stop-loss-pct 5.0
@@ -258,6 +278,57 @@ rather than reused parameters.
   Success bar. Still discarded as the baseline: Sharpe (+0.45) is far under
   the 1.2 bar and win rate (40.6%) is barely above a coin flip, both well
   short of the RSI+range-filter baseline's +1.51 Sharpe / 75.7% win rate.
+
+# Multi-asset portfolio (BTC + ETH + BNB)
+
+## Per-symbol confirmed baselines, capital split evenly (2026-07-24)
+
+Unlike the earlier naive diversification test (BTC's tuned parameters reused
+unchanged across BTC/ETH/SOL -- see "tested and discarded" under BTCUSDT
+above), this run gives each coin its own confirmed baseline via
+`multi_asset.py --per-symbol-baselines` (added this session specifically for
+this test), so the result measures genuine diversification benefit rather
+than conflating it with wrong-coin parameters.
+
+```
+python multi_asset.py --source ccxt --exchange binance \
+    --symbols "BTCUSDT,ETHUSDT,BNBUSDT" --per-symbol-baselines
+```
+
+Per-asset (all on genuine Binance data, 1h/730d, 17520 bars each):
+
+| Symbol | Trades | Win rate | Return | Sharpe | Max DD |
+|---|---|---|---|---|---|
+| BTCUSDT | 131 | 69.5% | +3.23% | +0.59 | -3.16% |
+| ETHUSDT | 105 | 78.1% | +3.55% | +1.25 | -2.64% |
+| BNBUSDT | 152 | 75.7% | +3.56% | +1.51 | -1.32% |
+
+(BTC's per-asset numbers here are the Binance cross-validation referenced in
+the data-source caveat above -- confirmed weaker than its Yahoo-validated
+baseline.)
+
+Portfolio (capital split evenly across the three, daily-resampled equity
+curve since hourly bars from different pairs don't align bar-for-bar):
+
+| Metric | Value | vs. threshold |
+|---|---|---|
+| Total trades | 388 | -- |
+| Combined win rate | 74.2% | -- |
+| Total return (730d) | +3.45% | -- |
+| Sharpe (annualized, daily) | +1.27 | clears >=1.2 |
+| Max drawdown | **-1.00%** | clears <=8% -- tightest of anything tested this project |
+| Worst rolling 30d | -0.87% | safe |
+| Best rolling 30d | +1.00% | short of +5% -- further from target than any single-coin baseline |
+
+**Verdict: does not beat BNB alone.** Diversification delivered exactly what
+it's supposed to on risk (lowest max drawdown of any configuration tested,
+including every single-coin baseline and the one leveraged full-Success
+BTC config) but it also compressed the upside -- best-30d return is now
+further from the +5% Success target than BNB alone (+0.80% best) or BTC
+alone (+2.40% best). Splitting capital three ways smooths both tails
+together; it didn't selectively cut risk while preserving return. Recorded
+here as a real, informative result -- not adopted as a replacement for the
+per-coin baselines.
 
 ## Tools to reproduce or extend any of this
 

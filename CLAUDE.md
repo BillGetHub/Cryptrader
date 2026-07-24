@@ -66,6 +66,14 @@ Backtest/README.md for details. The ATR-stop win suggests the remaining gap to f
 is more likely closable through refining risk mechanics (like this) than through a wholesale
 different signal.
 
+Data-source caveat (2026-07-24): the numbers above were validated on Yahoo's BTC-USD fiat
+pair only. Cross-checked against genuine Binance BTCUSDT with identical parameters (found
+incidentally via the multi-asset portfolio test below), results are meaningfully weaker --
+Sharpe +0.59 not +1.38, no longer clearing the >=1.2 Success bar (though still positive, so
+not a Failure breach), return +3.23% not +8.01%. ETH and BNB were both tuned directly on
+Binance from the start, so neither shares this exposure; BTC has not yet been re-tuned there
+-- an open question, not yet attempted. Full detail: Backtest/VALIDATED_PARAMETERS.md.
+
 ETHUSDT confirmed baseline (2026-07-24, backtested via ccxt/Binance -- yfinance has no
 ETH-USDT ticker, Kraken's ccxt pagination caps around 30 days): 78.1% win rate, +3.55%
 return, Sharpe +1.25, max drawdown -2.64%, 105 trades. Tuned independently, not copied from
@@ -85,6 +93,14 @@ Bollinger breaches Failure outright (worst 30d -4.11%, Sharpe -0.36); trend-foll
 Failure (unlike on BTC/ETH, where it breached 2-3 conditions) and its best-30d return
 (+5.02%) alone clears the Success bar, but Sharpe +0.45 and 40.6% win rate are both far
 short of the RSI+range-filter baseline. Full detail: Backtest/VALIDATED_PARAMETERS.md.
+
+Multi-asset portfolio (2026-07-24, BTC+ETH+BNB each on its own confirmed baseline, capital
+split evenly, genuine Binance data): 74.2% combined win rate, +3.45% return, Sharpe +1.27,
+max drawdown -1.00% (tightest of anything tested this project), worst 30d -0.87%, best 30d
++1.00%. Clears Sharpe/drawdown Success with the safest risk profile yet, but diversification
+compresses both tails together -- best-30d return ends up further from the +5% target than
+any single-coin baseline, not closer. Does not beat BNB alone; not adopted as a replacement
+for the per-coin baselines. Full detail: Backtest/VALIDATED_PARAMETERS.md.
 
 Previous baselines (kept for traceability):
 1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
