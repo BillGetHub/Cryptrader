@@ -51,6 +51,21 @@ top as a follow-up, mirroring exactly how the original Yahoo-data ATR-stop
 win was discovered (found after the fixed-stop baseline, not as part of the
 initial joint search).
 
+Pass 1 (7800 combos) hit the edge on four dimensions: rsi_entry (top result at
+26, the lower bound), short_rsi_entry (many top rows at 80, the upper bound),
+short_rsi_exit (the entire top 15 sat at 45, the lower bound -- the same
+value ETH and BNB both converged on independently), and range_max_distance_pct
+(2.5, the lower bound). rsi_period=14 beat 12 decisively (unlike ETH/BNB,
+where 12 won) but only two values were tested, so it's unclear if 14 is a
+peak or just the better of two options. stop_loss_pct was confirmed *not* a
+strong lever (near-flat Sharpe across 5.0-6.0). Pass 2 (this grid) widens the
+four edge-hit dimensions further, extends rsi_period upward past 14, and
+narrows rsi_exit/stop_loss_pct (neither showed an edge signal) to keep
+runtime bounded. 0/7800 combos cleared full CLAUDE.md Success in pass 1 --
+expected, matching the original Yahoo-data process where the fixed-stop pass
+never cleared full Success either (ATR-stop, tested as a follow-up afterward,
+was what got closest).
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
@@ -68,13 +83,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0, 5.5, 6.0]  # centered on BTC's Yahoo-tuned 5.0
-RSI_ENTRY_GRID = [26, 27, 28, 29]  # centered on BTC's Yahoo-tuned 28
-RSI_EXIT_GRID = [28, 29, 30, 31]  # centered on BTC's Yahoo-tuned 29
-SHORT_RSI_ENTRY_GRID = [74, 76, 78, 80]  # centered on BTC's Yahoo-tuned 78
-SHORT_RSI_EXIT_GRID = [45, 55, 65, 75]  # spans both BTC's Yahoo-tuned 65 and ETH/BNB's 45
-RSI_PERIOD_GRID = [12, 14]  # BTC's Yahoo-tuned 14 vs ETH/BNB's shared 12 -- genuinely unknown for BTC/Binance
-RANGE_MAX_DISTANCE_PCT_GRID = [2.5, 3.0, 3.5, 4.0]  # centered on BTC's Yahoo-tuned 3.0
+STOP_LOSS_PCT_GRID = [5.0, 5.5, 6.0]  # not a strong lever (near-flat 5.0-6.0 in pass 1); narrowed to save runtime
+RSI_ENTRY_GRID = [24, 25, 26, 27, 28]  # widened down: pass 1's top result hit 26, the lower edge
+RSI_EXIT_GRID = [29, 30]  # pass 1: 29 dominated, no edge hit; narrowed to save runtime
+SHORT_RSI_ENTRY_GRID = [76, 78, 80, 82, 84]  # widened up: pass 1 hit 80, the upper edge
+SHORT_RSI_EXIT_GRID = [30, 35, 40, 45, 50]  # widened down: pass 1's ENTIRE top 15 sat at 45, the lower edge
+RSI_PERIOD_GRID = [14, 16, 18]  # pass 1: 14 dominated 12 decisively; widened up past 14 to check for a further peak
+RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0]  # widened down: pass 1 hit 2.5, the lower edge
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
