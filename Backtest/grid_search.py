@@ -66,6 +66,16 @@ expected, matching the original Yahoo-data process where the fixed-stop pass
 never cleared full Success either (ATR-stop, tested as a follow-up afterward,
 was what got closest).
 
+Pass 2 (9000 combos) raised Sharpe from 1.30 to 1.64. rsi_period=14 now beat
+both 12 (pass 1) and 16/18 (pass 2) -- bracketed on both sides, confirmed a
+genuine peak, now fixed. stop_loss_pct stayed flat across 5.0-6.0 for a
+second pass -- confirmed non-critical, now fixed at 5.5 to save runtime.
+Four dimensions still hit an edge: rsi_entry (28, upper), short_rsi_entry (76,
+now the lower edge after the pass-2 shift), short_rsi_exit (50, upper), and
+range_max_distance_pct (1.5, lower, several top rows). Pass 3 (this grid)
+widens all four further; fixing rsi_period and stop_loss_pct freed up enough
+runtime budget to widen generously in one pass rather than needing a pass 4.
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
@@ -83,13 +93,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [5.0, 5.5, 6.0]  # not a strong lever (near-flat 5.0-6.0 in pass 1); narrowed to save runtime
-RSI_ENTRY_GRID = [24, 25, 26, 27, 28]  # widened down: pass 1's top result hit 26, the lower edge
-RSI_EXIT_GRID = [29, 30]  # pass 1: 29 dominated, no edge hit; narrowed to save runtime
-SHORT_RSI_ENTRY_GRID = [76, 78, 80, 82, 84]  # widened up: pass 1 hit 80, the upper edge
-SHORT_RSI_EXIT_GRID = [30, 35, 40, 45, 50]  # widened down: pass 1's ENTIRE top 15 sat at 45, the lower edge
-RSI_PERIOD_GRID = [14, 16, 18]  # pass 1: 14 dominated 12 decisively; widened up past 14 to check for a further peak
-RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0]  # widened down: pass 1 hit 2.5, the lower edge
+STOP_LOSS_PCT_GRID = [5.5]  # confirmed flat/non-critical across 5.0-6.0 in passes 1 and 2; fixed to save runtime
+RSI_ENTRY_GRID = [26, 27, 28, 29, 30, 31]  # widened up: pass 2 top result hit 28, the upper edge
+RSI_EXIT_GRID = [29, 30, 31, 32]  # widened slightly to stay valid as rsi_entry widens up
+SHORT_RSI_ENTRY_GRID = [68, 70, 72, 74, 76]  # widened down: pass 2 top result hit 76, the (shifted) lower edge
+SHORT_RSI_EXIT_GRID = [45, 50, 55, 60, 65]  # widened up: pass 2 top result hit 50, the upper edge
+RSI_PERIOD_GRID = [14]  # confirmed peak across both passes (12 worse in pass 1, 16/18 worse in pass 2); fixed to save runtime
+RANGE_MAX_DISTANCE_PCT_GRID = [0.75, 1.0, 1.25, 1.5, 2.0]  # widened down: pass 2 hit 1.5 heavily, several top rows at that edge
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
