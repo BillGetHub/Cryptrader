@@ -92,12 +92,18 @@ Failure (unlike on BTC/ETH, where it breached 2-3 conditions) and its best-30d r
 short of the RSI+range-filter baseline. Full detail: Backtest/VALIDATED_PARAMETERS.md.
 
 Multi-asset portfolio (2026-07-24, BTC+ETH+BNB each on its own confirmed baseline, capital
-split evenly, genuine Binance data): 74.2% combined win rate, +3.45% return, Sharpe +1.27,
-max drawdown -1.00% (tightest of anything tested this project), worst 30d -0.87%, best 30d
-+1.00%. Clears Sharpe/drawdown Success with the safest risk profile yet, but diversification
-compresses both tails together -- best-30d return ends up further from the +5% target than
-any single-coin baseline, not closer. Does not beat BNB alone; not adopted as a replacement
-for the per-coin baselines. Full detail: Backtest/VALIDATED_PARAMETERS.md.
+split evenly, genuine Binance data, re-run after BTC's Binance-native re-tune): 77.2% combined
+win rate, +4.61% return, Sharpe +1.98 (best of anything tested this project), max drawdown
+-0.82% (also tightest of anything tested), worst 30d -0.65%, best 30d +1.12%. Now beats every
+single-coin baseline, including BNB alone (+1.51 Sharpe) -- with BTC's re-tuned baseline
+pulling its own weight (Sharpe +1.56, up from the superseded baseline's +0.59 on Binance data),
+diversification amplifies three genuinely strong per-coin edges instead of being dragged down
+by one weak leg. Still short of the +5%/30d Success bar, same gap seen everywhere else.
+**Recommended as the live-deployment approach**: run one bot.py instance per coin (each
+already loads its own confirmed baseline via SYMBOL), capital split evenly across the three,
+rather than a single coin alone. An earlier run of this same test (before BTC's re-tune) did
+not beat BNB alone -- kept in VALIDATED_PARAMETERS.md for traceability. Full detail:
+Backtest/VALIDATED_PARAMETERS.md.
 
 Previous baselines (kept for traceability):
 1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.

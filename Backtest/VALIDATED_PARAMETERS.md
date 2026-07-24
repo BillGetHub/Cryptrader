@@ -332,14 +332,16 @@ rather than reused parameters.
 
 # Multi-asset portfolio (BTC + ETH + BNB)
 
-## Per-symbol confirmed baselines, capital split evenly (2026-07-24)
+## Per-symbol confirmed baselines, capital split evenly (2026-07-24, current)
 
 Unlike the earlier naive diversification test (BTC's tuned parameters reused
 unchanged across BTC/ETH/SOL -- see "tested and discarded" under BTCUSDT
 above), this run gives each coin its own confirmed baseline via
-`multi_asset.py --per-symbol-baselines` (added this session specifically for
-this test), so the result measures genuine diversification benefit rather
-than conflating it with wrong-coin parameters.
+`multi_asset.py --per-symbol-baselines`, so the result measures genuine
+diversification benefit rather than conflating it with wrong-coin
+parameters. This is the second run of this test -- the first (below, kept
+for traceability) used BTC's since-superseded Yahoo-tuned parameters; this
+one uses BTC's current Binance-native baseline (ATR(10)x2.0).
 
 ```
 python multi_asset.py --source ccxt --exchange binance \
@@ -350,39 +352,50 @@ Per-asset (all on genuine Binance data, 1h/730d, 17520 bars each):
 
 | Symbol | Trades | Win rate | Return | Sharpe | Max DD |
 |---|---|---|---|---|---|
-| BTCUSDT | 131 | 69.5% | +3.23% | +0.59 | -3.16% |
+| BTCUSDT | 77 | 79.2% | +6.71% | +1.56 | -2.32% |
 | ETHUSDT | 105 | 78.1% | +3.55% | +1.25 | -2.64% |
 | BNBUSDT | 152 | 75.7% | +3.56% | +1.51 | -1.32% |
-
-(BTC's per-asset numbers here are the Binance cross-validation that motivated
-re-tuning BTC directly on Binance -- see the BTCUSDT section above. This
-portfolio run predates that re-tuning and used the old ATR(21)x2.0/Yahoo-
-tuned parameters for BTC's leg, not the current ATR(10)x2.0 baseline. The
-portfolio has not been re-run with BTC's new parameters; doing so is a
-natural follow-up, not yet done.)
 
 Portfolio (capital split evenly across the three, daily-resampled equity
 curve since hourly bars from different pairs don't align bar-for-bar):
 
 | Metric | Value | vs. threshold |
 |---|---|---|
-| Total trades | 388 | -- |
-| Combined win rate | 74.2% | -- |
-| Total return (730d) | +3.45% | -- |
-| Sharpe (annualized, daily) | +1.27 | clears >=1.2 |
-| Max drawdown | **-1.00%** | clears <=8% -- tightest of anything tested this project |
-| Worst rolling 30d | -0.87% | safe |
-| Best rolling 30d | +1.00% | short of +5% -- further from target than any single-coin baseline |
+| Total trades | 334 | -- |
+| Combined win rate | 77.2% | -- |
+| Total return (730d) | +4.61% | -- |
+| Sharpe (annualized, daily) | **+1.98** | clears >=1.2 -- best Sharpe of anything tested this project |
+| Max drawdown | **-0.82%** | clears <=8% -- tightest of anything tested this project |
+| Worst rolling 30d | -0.65% | safe |
+| Best rolling 30d | +1.12% | short of +5%, but closer than the first portfolio run |
 
-**Verdict: does not beat BNB alone.** Diversification delivered exactly what
-it's supposed to on risk (lowest max drawdown of any configuration tested,
-including every single-coin baseline and the one leveraged full-Success
-BTC config) but it also compressed the upside -- best-30d return is now
-further from the +5% Success target than BNB alone (+0.80% best) or BTC
-alone (+2.40% best). Splitting capital three ways smooths both tails
-together; it didn't selectively cut risk while preserving return. Recorded
-here as a real, informative result -- not adopted as a replacement for the
-per-coin baselines.
+**Verdict: now beats every single-coin baseline, including BNB alone
+(+1.51 Sharpe).** With BTC's Binance-native baseline pulling its own weight
+(Sharpe +1.56, up from the superseded baseline's +0.59), diversification now
+amplifies three genuinely strong per-coin edges instead of being dragged
+down by one weak leg -- both Sharpe and drawdown improved simultaneously
+versus running any single coin alone, not just versus the first portfolio
+run. Still short of the +5%/30d Success bar, same gap seen everywhere else
+in this project.
+
+**Recommended as the live-deployment approach**: run one `bot.py` instance
+per coin (each already loads its own confirmed baseline via `SYMBOL`),
+capital split evenly across the three, rather than running a single coin
+alone. This is the strongest risk-adjusted result found in the project and
+is directly actionable, not just a backtest curiosity -- `bot.py`'s
+per-symbol `BASELINES` dict already supports this without further code
+changes.
+
+### First portfolio run (2026-07-24, superseded BTC parameters)
+
+Same setup, but before BTC was re-tuned on Binance -- used the then-current
+ATR(21)x2.0/Yahoo-tuned baseline for BTC's leg (Sharpe +0.59 on Binance data
+at the time). Combined win rate 74.2%, +3.45% return, Sharpe +1.27, max
+drawdown -1.00%, worst 30d -0.87%, best 30d +1.00%, 388 trades. At the time
+this did *not* beat BNB alone (+1.51 Sharpe) -- diversification was
+smoothing both tails together rather than selectively cutting risk, since
+one of the three legs (BTC) was underperforming. Kept for traceability;
+superseded by the re-run above once BTC's Binance-native baseline existed.
 
 ## Tools to reproduce or extend any of this
 
