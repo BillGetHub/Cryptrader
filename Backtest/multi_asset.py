@@ -12,12 +12,25 @@ Capital is split evenly across the symbols given. Each asset's hourly equity
 curve is resampled to daily and summed to build the portfolio curve (daily,
 not hourly, since different pairs' fetched bars don't line up exactly bar for
 bar) -- so Sharpe here is calculated on daily returns, not hourly like
-backtest.py's default. Uses the confirmed baseline's RSI/stop/range-filter
-parameters by default; override with the same flags as backtest.py.
+backtest.py's default.
+
+Two parameter modes:
+  - Default: one shared set of RSI/stop/range-filter flags (same as
+    backtest.py's) applied to every symbol. This is what an earlier session
+    used to test naive diversification with BTC's tuned parameters reused
+    unchanged on ETH/SOL -- it failed (combined Sharpe -0.51, see
+    VALIDATED_PARAMETERS.md), because a coin's tuned parameters don't
+    transfer to another coin.
+  - --per-symbol-baselines: each symbol uses its own confirmed baseline from
+    CONFIRMED_BASELINES below (BTC, ETH, BNB as of 2026-07-24) instead of the
+    shared flags. This is the correct way to test diversification benefit,
+    since it doesn't conflate "wrong parameters for this coin" with "genuine
+    diversification effect."
 
 Usage:
     python multi_asset.py --interval 1h --period 730d
     python multi_asset.py --source ccxt --exchange kraken --symbols "BTCUSDT,ETHUSDT,SOLUSDT"
+    python multi_asset.py --source ccxt --exchange binance --symbols "BTCUSDT,ETHUSDT,BNBUSDT" --per-symbol-baselines
 """
 import argparse
 
@@ -35,6 +48,53 @@ from backtest import (
 DEFAULT_SYMBOLS = {
     "yfinance": "BTCUSDT,ETHUSDT,SOLUSDT",
     "ccxt": "BTCUSDT,ETHUSDT,SOLUSDT",
+}
+
+# Each coin's own confirmed baseline (CLAUDE.md / VALIDATED_PARAMETERS.md,
+# 2026-07-24), for --per-symbol-baselines. Keyed on the bare pair form used
+# throughout this project (normalize_symbol handles per-source formatting).
+CONFIRMED_BASELINES = {
+    "BTCUSDT": dict(
+        rsi_period=14,
+        rsi_entry=28.0,
+        rsi_exit=29.0,
+        stop_loss_pct=5.0,
+        enable_short=True,
+        short_rsi_entry=78.0,
+        short_rsi_exit=65.0,
+        enable_range_filter=True,
+        range_ma_period=200,
+        range_max_distance_pct=3.0,
+        enable_atr_stop=True,
+        atr_period=21,
+        atr_multiplier=2.0,
+    ),
+    "ETHUSDT": dict(
+        rsi_period=12,
+        rsi_entry=28.0,
+        rsi_exit=29.0,
+        stop_loss_pct=4.5,
+        enable_short=True,
+        short_rsi_entry=76.0,
+        short_rsi_exit=45.0,
+        enable_range_filter=True,
+        range_ma_period=200,
+        range_max_distance_pct=2.5,
+        enable_atr_stop=False,
+    ),
+    "BNBUSDT": dict(
+        rsi_period=12,
+        rsi_entry=27.0,
+        rsi_exit=29.0,
+        stop_loss_pct=5.0,
+        enable_short=True,
+        short_rsi_entry=78.0,
+        short_rsi_exit=45.0,
+        enable_range_filter=True,
+        range_ma_period=200,
+        range_max_distance_pct=4.0,
+        enable_atr_stop=False,
+    ),
 }
 
 
@@ -61,6 +121,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--enable-range-filter", action="store_true")
     parser.add_argument("--range-ma-period", type=int, default=200)
     parser.add_argument("--range-max-distance-pct", type=float, default=3.0)
+    parser.add_argument("--enable-atr-stop", action="store_true", help="Ignored per-symbol if --per-symbol-baselines is set.")
+    parser.add_argument("--atr-period", type=int, default=21)
+    parser.add_argument("--atr-multiplier", type=float, default=2.0)
+    parser.add_argument(
+        "--per-symbol-baselines",
+        action="store_true",
+        help="Use each symbol's own confirmed baseline (CONFIRMED_BASELINES) instead of "
+        "the shared flags above. Only defined for BTCUSDT/ETHUSDT/BNBUSDT; any other "
+        "symbol falls back to the shared flags with a warning.",
+    )
     parser.add_argument("--initial-balance", type=float, default=10000.0, help="Total capital, split evenly across symbols.")
     parser.add_argument("--csv-out", default=None, help="optional path to write the portfolio equity curve as CSV")
     args = parser.parse_args()
@@ -88,20 +158,59 @@ def main() -> None:
     for symbol in args.symbol_list:
         print(f"Fetching {symbol} {args.interval} data ({args.source})...")
         df = fetch_one(args, symbol)
+
+        if args.per_symbol_baselines:
+            baseline = CONFIRMED_BASELINES.get(symbol.upper())
+            if baseline is None:
+                print(f"  No confirmed baseline for {symbol}, falling back to shared CLI flags.")
+                params = dict(
+                    rsi_period=args.rsi_period,
+                    rsi_entry=args.rsi_entry,
+                    rsi_exit=args.rsi_exit,
+                    stop_loss_pct=args.stop_loss_pct,
+                    enable_short=args.enable_short,
+                    short_rsi_entry=args.short_rsi_entry,
+                    short_rsi_exit=args.short_rsi_exit,
+                    enable_range_filter=args.enable_range_filter,
+                    range_ma_period=args.range_ma_period,
+                    range_max_distance_pct=args.range_max_distance_pct,
+                    enable_atr_stop=args.enable_atr_stop,
+                    atr_period=args.atr_period,
+                    atr_multiplier=args.atr_multiplier,
+                )
+            else:
+                print(f"  Using {symbol}'s own confirmed baseline.")
+                params = dict(baseline)
+        else:
+            params = dict(
+                rsi_period=args.rsi_period,
+                rsi_entry=args.rsi_entry,
+                rsi_exit=args.rsi_exit,
+                stop_loss_pct=args.stop_loss_pct,
+                enable_short=args.enable_short,
+                short_rsi_entry=args.short_rsi_entry,
+                short_rsi_exit=args.short_rsi_exit,
+                enable_range_filter=args.enable_range_filter,
+                range_ma_period=args.range_ma_period,
+                range_max_distance_pct=args.range_max_distance_pct,
+                enable_atr_stop=args.enable_atr_stop,
+                atr_period=args.atr_period,
+                atr_multiplier=args.atr_multiplier,
+            )
+
+        rsi_period = params.pop("rsi_period")
+        rsi_entry = params.pop("rsi_entry")
+        rsi_exit = params.pop("rsi_exit")
+        stop_loss_pct = params.pop("stop_loss_pct")
         result = simulate(
             df,
-            args.rsi_period,
-            args.rsi_entry,
-            args.rsi_exit,
-            args.stop_loss_pct,
+            rsi_period,
+            rsi_entry,
+            rsi_exit,
+            stop_loss_pct,
             args.position_size_r,
             per_asset_balance,
-            enable_short=args.enable_short,
-            short_rsi_entry=args.short_rsi_entry,
-            short_rsi_exit=args.short_rsi_exit,
-            enable_range_filter=args.enable_range_filter,
-            range_ma_period=args.range_ma_period,
-            range_max_distance_pct=args.range_max_distance_pct,
+            **params,
         )
         metrics = compute_metrics(result["equity"], result["trades"], per_asset_balance, INTERVAL_BARS_PER_YEAR[args.interval])
         per_asset_summary.append(
