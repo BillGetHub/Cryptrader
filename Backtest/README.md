@@ -13,19 +13,25 @@ Two free data sources are supported, picked with `--source`:
   discrepancy). It's also not subject to Yahoo's intraday history cap, though a
   long `--period` means more paginated API requests.
 
-- Entry: RSI(14) < 25
-- Stop: 1.4% below entry
+Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24), found via
+`grid_search.py`: 71.5% win rate, +0.18% return, Sharpe +0.06, max drawdown
+-2.01% on BTC-USD 1h/730d. It clears CLAUDE.md's Failure conditions but not
+yet Success (return >= +5%/30d, Sharpe >= 1.2) -- still a work in progress.
+
+- Entry: RSI(14) < 27
+- Stop: 4.5% below entry
 - Size: 0.5R (percent of account balance risked per trade)
-- Exit: stop hit, or RSI recovers to >= 50 (mean-reversion exit) -- **not** part of
-  the CLAUDE.md spec, it's a default assumption needed to close a trade. Tune it
+- Exit: stop hit, or RSI recovers to >= 30 (mean-reversion exit) -- **not** part of
+  the original CLAUDE.md spec, it's an assumption needed to close a trade. Tune it
   with `--rsi-exit` like any other variable.
 
 By default only the long side above is simulated, matching CLAUDE.md and `bot.py`.
 `--enable-short` (off by default) adds an independent short leg with its own RSI
-bands (`--short-rsi-entry` / `--short-rsi-exit`) -- **backtest-only**. Kraken spot,
-the venue `bot.py` trades on, has no native short selling; that would require a
-margin/futures account with liquidation risk and funding costs this harness
-doesn't model. Don't treat a short-enabled result as ready for live trading.
+bands (`--short-rsi-entry 78` / `--short-rsi-exit 62` by default) -- **backtest-only**,
+and part of the confirmed baseline above. Kraken spot, the venue `bot.py` trades on,
+has no native short selling; that would require a margin/futures account with
+liquidation risk and funding costs this harness doesn't model. Don't treat a
+short-enabled result as ready for live trading.
 
 ## Install
 
@@ -61,13 +67,13 @@ thresholds:
 | `--interval` | `1h` | `1m`,`5m`,`15m`,`30m`,`1h`,`1d` |
 | `--period` | `730d` | Yahoo caps intraday history: `1h` ~730 days, `1m` ~7 days (`1d` has no cap). ccxt has no such cap, but longer periods mean more paginated requests. |
 | `--rsi-period` | `14` | |
-| `--rsi-entry` | `25` | |
-| `--rsi-exit` | `50` | mean-reversion exit, not in spec |
-| `--stop-loss-pct` | `1.4` | |
+| `--rsi-entry` | `27` | |
+| `--rsi-exit` | `30` | mean-reversion exit, not in spec |
+| `--stop-loss-pct` | `4.5` | |
 | `--position-size-r` | `0.5` | |
-| `--enable-short` | off | backtest-only, see caveat above |
-| `--short-rsi-entry` | `75` | short when RSI rises above this (only with `--enable-short`) |
-| `--short-rsi-exit` | `65` | cover when RSI falls back to this (only with `--enable-short`) |
+| `--enable-short` | off | backtest-only, see caveat above; part of the confirmed baseline when on |
+| `--short-rsi-entry` | `78` | short when RSI rises above this (only with `--enable-short`) |
+| `--short-rsi-exit` | `62` | cover when RSI falls back to this (only with `--enable-short`) |
 | `--initial-balance` | `10000` | |
 | `--csv-out` | none | optional path to dump the equity curve |
 
@@ -77,7 +83,7 @@ Change one flag at a time, re-run, and compare the printed metrics against the
 current baseline before treating a change as an improvement:
 
 ```bash
-python backtest.py --rsi-entry 20   # vs. baseline --rsi-entry 25
+python backtest.py --rsi-entry 24   # vs. baseline --rsi-entry 27
 ```
 
 Per CLAUDE.md, confirm with the project owner before adopting a new baseline.

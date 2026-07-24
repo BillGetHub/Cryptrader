@@ -3,12 +3,14 @@
 Single-variable tuning (see README.md) hit a local maximum at 68.5% win rate
 and couldn't clear it moving one lever at a time. This sweeps combinations of
 levers together, fetching the data once and re-running the (fast, local,
-no-network) simulation for every combination in the grid.
-
-The grid below is centered on the local optimum found by hand:
-    --rsi-entry 28 --rsi-exit 30 --stop-loss-pct 4.0
-    --enable-short --short-rsi-entry 75 --short-rsi-exit 60 --rsi-period 14
-Edit STOP_LOSS_PCT_GRID etc. below to widen or shift the search.
+no-network) simulation for every combination in the grid. That search found
+the confirmed baseline in CLAUDE.md (2026-07-24): 71.5% win rate, +0.18%
+return, Sharpe +0.06 on BTC-USD 1h/730d --
+    --rsi-entry 27 --rsi-exit 30 --stop-loss-pct 4.5
+    --enable-short --short-rsi-entry 78 --short-rsi-exit 62 --rsi-period 14
+Still short of CLAUDE.md's Success thresholds (return >= +5%/30d, Sharpe >=
+1.2). The grid below is centered on that baseline for further tuning -- edit
+STOP_LOSS_PCT_GRID etc. to widen or shift the search.
 
 Usage:
     python grid_search.py --symbol BTC-USD --interval 1h --period 730d
@@ -22,11 +24,11 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [3.5, 4.0, 4.5]
+STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0]
 RSI_ENTRY_GRID = [26, 27, 28]
 RSI_EXIT_GRID = [29, 30, 31]
-SHORT_RSI_ENTRY_GRID = [70, 75, 78]
-SHORT_RSI_EXIT_GRID = [58, 60, 62]
+SHORT_RSI_ENTRY_GRID = [76, 78, 80]
+SHORT_RSI_EXIT_GRID = [60, 62, 64]
 RSI_PERIOD_GRID = [12, 14]
 
 

@@ -30,9 +30,23 @@ Sharpe < 1 Not Great
 Sharpe between 1 to 2 is Good
 Sharpe > 2 is Excellence
 
-Entry : rsi < 25
-Stop : 1.4%
+Entry : rsi < 27
+Exit : rsi >= 30 (mean-reversion exit; not in original spec, added so a trade has a close condition)
+Stop : 4.5%
 Size : 0.5R
+RSI period : 14
+
+Short (backtest-only -- Kraken spot has no native short selling, would need margin/futures):
+Entry : rsi > 78
+Exit : rsi <= 62
+Stop : 4.5% above entry
+
+Baseline confirmed 2026-07-24, backtested on BTC-USD 1h, 730d (yfinance) via Backtest/grid_search.py:
+71.5% win rate, +0.18% return, Sharpe +0.06, max drawdown -2.01%, worst rolling 30d -0.84%.
+Clears all Failure conditions above (drawdown, 30d return, Sharpe). Does not yet meet Success
+(return >= +5%/30d, Sharpe >= 1.2) -- still to be improved.
+
+Previous baseline (original spec, never cleared Failure): Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
 
 Improve the strategy after backtest the strategy with scientific approach, i.e., change one variable at a time and verify if the result is better with the particular variable change.
 

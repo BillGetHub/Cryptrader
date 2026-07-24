@@ -4,10 +4,13 @@ Entry: RSI(period) < entry threshold
 Stop:  stop_loss_pct below entry
 Size:  position_size_r percent of account balance risked per trade
 
-CLAUDE.md defines an entry and a stop but no exit target. This harness closes
-a position on whichever comes first: the stop being hit, or RSI recovering to
->= --rsi-exit (a mean-reversion exit, default 50). That default is an
-assumption, not a spec requirement -- tune it like any other variable.
+CLAUDE.md defines an entry and a stop but no exit target; --rsi-exit closes a
+position on RSI recovering back up, or the stop being hit. Defaults below are
+the confirmed baseline (CLAUDE.md, 2026-07-24): 71.5% win rate, +0.18% return,
+Sharpe +0.06, max drawdown -2.01%, worst rolling 30d -0.84% on BTC-USD 1h/730d.
+--enable-short reproduces the short leg that baseline includes; without it
+you get the long-only subset. Still short of CLAUDE.md's Success thresholds
+(return >= +5%/30d, Sharpe >= 1.2) -- keep tuning with grid_search.py.
 
 Data can come from either source:
     --source yfinance (default): Yahoo Finance via the yfinance package.
@@ -297,14 +300,14 @@ def parse_args() -> argparse.Namespace:
         "but a longer period means more paginated API requests.",
     )
     parser.add_argument("--rsi-period", type=int, default=14)
-    parser.add_argument("--rsi-entry", type=float, default=25.0)
+    parser.add_argument("--rsi-entry", type=float, default=27.0)
     parser.add_argument(
         "--rsi-exit",
         type=float,
-        default=50.0,
+        default=30.0,
         help="RSI level that closes an open position. Not in CLAUDE.md spec -- an assumption to tune.",
     )
-    parser.add_argument("--stop-loss-pct", type=float, default=1.4)
+    parser.add_argument("--stop-loss-pct", type=float, default=4.5)
     parser.add_argument("--position-size-r", type=float, default=0.5)
     parser.add_argument(
         "--enable-short",
@@ -316,13 +319,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--short-rsi-entry",
         type=float,
-        default=75.0,
+        default=78.0,
         help="Short entry when RSI rises above this (only used with --enable-short).",
     )
     parser.add_argument(
         "--short-rsi-exit",
         type=float,
-        default=65.0,
+        default=62.0,
         help="Cover the short when RSI falls back to this (only used with --enable-short).",
     )
     parser.add_argument("--initial-balance", type=float, default=10000.0)
