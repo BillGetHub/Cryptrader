@@ -128,6 +128,9 @@ def simulate(
     short_rsi_exit: float = 65.0,
     enable_trend_filter: bool = False,
     trend_ma_period: int = 200,
+    enable_range_filter: bool = False,
+    range_ma_period: int = 200,
+    range_max_distance_pct: float = 5.0,
 ) -> dict:
     """Long entries fire on RSI < rsi_entry, exit on RSI >= rsi_exit (or stop below entry).
     Short entries (opt-in) fire on RSI > short_rsi_entry, exit on RSI <= short_rsi_exit
@@ -135,8 +138,15 @@ def simulate(
 
     enable_trend_filter (opt-in) requires the trend to agree with the trade direction:
     longs only fire when close > trend_ma_period-bar SMA (uptrend), shorts only when
-    close < that SMA (downtrend). Every RSI band tested so far trades RSI extremes with
-    no sense of the broader trend; this is the first structurally different lever.
+    close < that SMA (downtrend). Backtested and discarded (CLAUDE.md, 2026-07-24) --
+    hurt Sharpe/return at both tested periods, likely because it's really a different
+    strategy (buy-the-dip-in-an-uptrend) rather than a refinement of this one.
+
+    enable_range_filter (opt-in) is a different hypothesis: RSI mean reversion tends to
+    work best when price is ranging near its average and worst in strong trends either
+    direction, so this only allows entries (long or short) when price is within
+    range_max_distance_pct of the range_ma_period-bar SMA -- filtering out strong trends
+    instead of trading with them.
 
     Uses raw numpy arrays instead of DataFrame.iloc in the per-bar loop -- .iloc lookups
     dominate runtime when this is called hundreds of times in grid_search.py.
@@ -152,6 +162,11 @@ def simulate(
         trend_ma = df["Close"].rolling(trend_ma_period).mean().to_numpy(dtype=np.float64)
     else:
         trend_ma = None
+
+    if enable_range_filter:
+        range_ma = df["Close"].rolling(range_ma_period).mean().to_numpy(dtype=np.float64)
+    else:
+        range_ma = None
 
     balance = initial_balance
     equity = np.empty(n, dtype=np.float64)
@@ -202,10 +217,15 @@ def simulate(
                 trend_ok_long = not np.isnan(ma) and close > ma
                 trend_ok_short = not np.isnan(ma) and close < ma
 
+            range_ok = True
+            if enable_range_filter:
+                ma = range_ma[i]
+                range_ok = not np.isnan(ma) and abs(close - ma) / ma * 100 <= range_max_distance_pct
+
             new_direction = None
-            if r < rsi_entry and trend_ok_long:
+            if r < rsi_entry and trend_ok_long and range_ok:
                 new_direction = "long"
-            elif enable_short and r > short_rsi_entry and trend_ok_short:
+            elif enable_short and r > short_rsi_entry and trend_ok_short and range_ok:
                 new_direction = "short"
 
             if new_direction is not None:
@@ -359,6 +379,25 @@ def parse_args() -> argparse.Namespace:
         default=200,
         help="SMA period (in bars) for --enable-trend-filter.",
     )
+    parser.add_argument(
+        "--enable-range-filter",
+        action="store_true",
+        help="Only take entries (long or short) when price is within --range-max-distance-pct "
+        "of the --range-ma-period SMA -- filters out strong trends instead of trading with "
+        "them, unlike --enable-trend-filter. Off by default.",
+    )
+    parser.add_argument(
+        "--range-ma-period",
+        type=int,
+        default=200,
+        help="SMA period (in bars) for --enable-range-filter.",
+    )
+    parser.add_argument(
+        "--range-max-distance-pct",
+        type=float,
+        default=5.0,
+        help="Max %% distance from the range SMA allowed for an entry (only with --enable-range-filter).",
+    )
     parser.add_argument("--initial-balance", type=float, default=10000.0)
     parser.add_argument("--csv-out", default=None, help="optional path to write the equity curve as CSV")
     args = parser.parse_args()
@@ -384,6 +423,9 @@ def main() -> None:
         short_rsi_exit=args.short_rsi_exit,
         enable_trend_filter=args.enable_trend_filter,
         trend_ma_period=args.trend_ma_period,
+        enable_range_filter=args.enable_range_filter,
+        range_ma_period=args.range_ma_period,
+        range_max_distance_pct=args.range_max_distance_pct,
     )
     metrics = compute_metrics(
         result["equity"], result["trades"], args.initial_balance, INTERVAL_BARS_PER_YEAR[args.interval]
@@ -400,6 +442,8 @@ def main() -> None:
     print(f"Stop / Size:         {args.stop_loss_pct}% / {args.position_size_r}R")
     if args.enable_trend_filter:
         print(f"Trend filter:        on, {args.trend_ma_period}-bar SMA")
+    if args.enable_range_filter:
+        print(f"Range filter:        on, within {args.range_max_distance_pct}% of {args.range_ma_period}-bar SMA")
     print()
     if args.enable_short:
         print(f"Trades:              {metrics['num_trades']} (long {metrics['num_long_trades']}, short {metrics['num_short_trades']})")

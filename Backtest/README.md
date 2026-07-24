@@ -33,17 +33,23 @@ has no native short selling; that would require a margin/futures account with
 liquidation risk and funding costs this harness doesn't model. Don't treat a
 short-enabled result as ready for live trading.
 
-`--enable-trend-filter` (off by default) is the first lever that isn't just an RSI
-threshold: it only allows a long entry when price is above the `--trend-ma-period`
-(default 200) simple moving average, and a short entry only below it. Every RSI
-band combination tuned so far (single-variable and grid search) traded RSI extremes
-with no sense of the broader trend -- Sharpe never exceeded ~0.2 no matter how the
-thresholds moved, which is why this is worth testing before doing more threshold
-tuning:
+`--enable-trend-filter` (off by default) only allows a long entry when price is
+above the `--trend-ma-period` (default 200) simple moving average, and a short
+entry only below it -- i.e. trade *with* the trend. **Tested and discarded**
+(CLAUDE.md, 2026-07-24): hurt Sharpe/return at both a 200-bar and 500-bar SMA on
+BTC-USD 1h/730d, likely because it's really a different strategy (buy-the-dip-in-
+an-uptrend) rather than a refinement of RSI mean reversion.
+
+`--enable-range-filter` (off by default) is the opposite hypothesis: RSI mean
+reversion tends to work best when price is *ranging* near its average and worst
+in strong trends either direction, so this only allows an entry (long or short)
+when price is within `--range-max-distance-pct` (default 5%) of the
+`--range-ma-period` (default 200) SMA -- filtering strong trends *out* instead of
+trading with them:
 
 ```bash
-python backtest.py --enable-short --enable-trend-filter --trend-ma-period 200
-python backtest.py --enable-short --enable-trend-filter --trend-ma-period 500
+python backtest.py --enable-short --enable-range-filter --range-ma-period 200 --range-max-distance-pct 5
+python backtest.py --enable-short --enable-range-filter --range-ma-period 200 --range-max-distance-pct 3
 ```
 
 ## Install
@@ -87,8 +93,11 @@ thresholds:
 | `--enable-short` | off | backtest-only, see caveat above; part of the confirmed baseline when on |
 | `--short-rsi-entry` | `78` | short when RSI rises above this (only with `--enable-short`) |
 | `--short-rsi-exit` | `62` | cover when RSI falls back to this (only with `--enable-short`) |
-| `--enable-trend-filter` | off | longs only above the trend SMA, shorts only below it |
+| `--enable-trend-filter` | off | longs only above the trend SMA, shorts only below it; tested and discarded |
 | `--trend-ma-period` | `200` | SMA period in bars (only with `--enable-trend-filter`) |
+| `--enable-range-filter` | off | entries only within `--range-max-distance-pct` of the range SMA |
+| `--range-ma-period` | `200` | SMA period in bars (only with `--enable-range-filter`) |
+| `--range-max-distance-pct` | `5.0` | max %% distance from the SMA allowed for an entry (only with `--enable-range-filter`) |
 | `--initial-balance` | `10000` | |
 | `--csv-out` | none | optional path to dump the equity curve |
 
