@@ -24,8 +24,18 @@ even at 114 trades over 730 days with 0.5R risk per trade, this is a very
 safe configuration but structurally capped on absolute return (see CLAUDE.md
 for the full note; getting all three Success conditions at once likely needs
 more frequent trading still or larger sizing, not just more threshold
-tuning). This grid is centered on the current baseline for further tuning --
-edit the *_GRID constants to widen or shift further.
+tuning).
+
+The *_GRID constants below are edited freely as tuning moves to new assets or
+regions -- they are a scratch workspace, not a record. BTC's confirmed
+baseline above (which also uses --enable-atr-stop, not swept here) is
+recorded permanently in CLAUDE.md and Backtest/VALIDATED_PARAMETERS.md
+regardless of what the grid currently contains. As of 2026-07-24 the grid is
+narrowed/shifted for ETHUSDT exploration (via --source ccxt --exchange
+binance, since Kraken's ccxt pagination can't reach 730 days and yfinance has
+no ETH-USDT ticker) -- ETH's joint search landed on the lower edge of
+stop_loss_pct, short_rsi_entry, short_rsi_exit, and range_max_distance_pct,
+so this widens/shifts each downward from BTC's ranges to test past that edge.
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -44,14 +54,14 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.5, 5.0, 5.5]
-RSI_ENTRY_GRID = [27, 28, 29]
-RSI_EXIT_GRID = [28, 29, 30]
-SHORT_RSI_ENTRY_GRID = [76, 78, 80]
-SHORT_RSI_EXIT_GRID = [62, 65, 68]
-RSI_PERIOD_GRID = [12, 14]
-RANGE_MAX_DISTANCE_PCT_GRID = [2.5, 3.0, 3.5]
-RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand; not swept here
+STOP_LOSS_PCT_GRID = [3.0, 3.5, 4.0, 4.5]
+RSI_ENTRY_GRID = [27, 28]
+RSI_EXIT_GRID = [29, 30]
+SHORT_RSI_ENTRY_GRID = [70, 72, 74, 76]
+SHORT_RSI_EXIT_GRID = [54, 57, 60, 62]
+RSI_PERIOD_GRID = [12]  # confirmed peak for ETH (bracketed against 10 and 14 by hand); narrowed to save runtime
+RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5]
+RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
     "win_rate": ["win_rate_pct", "sharpe"],
