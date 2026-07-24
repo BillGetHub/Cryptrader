@@ -250,10 +250,14 @@ rather than reused parameters.
   alternative-strategy test across all three coins to breach a hard Failure
   threshold rather than just falling short of Success.
 - **Trend-following** (`--fast-ma-period 20 --slow-ma-period 50 --enable-short`
-  on Binance BNB/USDT): not yet run to completion -- command issued but
-  result not yet captured. Given trend-following breached 2-3 Failure
-  conditions on both BTC and ETH, expected to underperform here too, but
-  not confirmed.
+  on Binance BNB/USDT): 401 trades, 40.6% win rate (long 40.3%, short 41.0%),
+  +4.53% return, Sharpe +0.45, max drawdown -6.01%, worst 30d -2.52%, best
+  30d +5.02%. Notably **does not breach any Failure condition** -- the only
+  one of the six trend-following/Bollinger tests across all three coins to
+  clear Failure outright, and its best-30d return alone clears the +5%
+  Success bar. Still discarded as the baseline: Sharpe (+0.45) is far under
+  the 1.2 bar and win rate (40.6%) is barely above a coin flip, both well
+  short of the RSI+range-filter baseline's +1.51 Sharpe / 75.7% win rate.
 
 ## Tools to reproduce or extend any of this
 

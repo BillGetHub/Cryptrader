@@ -81,8 +81,10 @@ grid_search.py with every parameter dimension confirmed bracketed (none sitting 
 range edge). Shares ETH's RSI period (12, not BTC's 14) and no ATR-stop, but its own values
 elsewhere -- rsi-entry 27, short-rsi-entry 78/short-rsi-exit 45, range filter widened to
 4.0%. Trend-following and Bollinger Bands were both tested as alternatives and discarded:
-Bollinger breaches Failure outright (worst 30d -4.11%, Sharpe -0.36); trend-following result
-pending. Full detail: Backtest/VALIDATED_PARAMETERS.md.
+Bollinger breaches Failure outright (worst 30d -4.11%, Sharpe -0.36); trend-following clears
+Failure (unlike on BTC/ETH, where it breached 2-3 conditions) and its best-30d return
+(+5.02%) alone clears the Success bar, but Sharpe +0.45 and 40.6% win rate are both far
+short of the RSI+range-filter baseline. Full detail: Backtest/VALIDATED_PARAMETERS.md.
 
 Previous baselines (kept for traceability):
 1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
