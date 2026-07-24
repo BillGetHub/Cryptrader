@@ -6,12 +6,21 @@ thresholds before anything touches the live bot in `References/LiveTradingBots/`
 
 Two free data sources are supported, picked with `--source`:
 
-- `yfinance` (default): Yahoo Finance via the `yfinance` package.
+- `yfinance` (default): Yahoo Finance via the `yfinance` package. Free tier is
+  subject to rate limiting (`YFRateLimitError`) if hit too often in a short
+  span -- wait a minute or two and retry, or switch to `--source ccxt`.
 - `ccxt`: a crypto exchange's own public REST API via `ccxt` -- no API key needed
   for OHLCV data. Defaults to Kraken, the same venue `bot.py` actually trades on,
   so backtest and live signals see identical prices (no Yahoo-vs-exchange
-  discrepancy). It's also not subject to Yahoo's intraday history cap, though a
-  long `--period` means more paginated API requests.
+  discrepancy). **Known gotcha:** Kraken's public OHLC endpoint does not
+  actually support deep historical pagination -- despite `fetch_data_ccxt()`
+  requesting data back to `--period`, Kraken only ever returns its most recent
+  ~720 candles regardless of the requested `since` (confirmed 2026-07-24:
+  requesting 730 days of 1h data returned only ~721 bars, i.e. ~30 days). Use
+  `--source ccxt --exchange kraken` for short lookback windows or live/recent
+  signals only -- for a full 730-day backtest, `--source yfinance` is
+  currently the only source that actually delivers it. A different ccxt
+  exchange (e.g. Binance) might not have this limitation, untested here.
 
 Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24): 76.3% win
 rate, +1.75% return, Sharpe +1.31, max drawdown -0.42%, worst rolling 30d
