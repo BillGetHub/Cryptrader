@@ -75,6 +75,21 @@ BTC's pass 3). rsi_entry (22) and short_rsi_entry (68) both still hit their
 lower edge even after widening. Pass 3 (this grid) corrects the
 range_max_distance_pct direction and widens the other two further down.
 
+Pass 3 (7680 combos) was a big jump: Sharpe +1.07 -> **+2.12** -- the best
+result found anywhere in this project, beating even the multi-asset
+portfolio (+1.98). 0/7680 combos hit Failure (down from 6108 in pass 2).
+The bimodal stop_loss_pct pattern resolved cleanly to 5.0 (now the lower
+edge, needs widening down); short_rsi_exit hit 55 (upper edge); rsi_entry
+(18) and range_max_distance_pct (1.5) both still hit their lower edge even
+after two rounds of widening down -- SOL clearly wants a much more
+aggressive, selective configuration than any other coin (deeper oversold
+entry, much tighter range filter). short_rsi_entry=64 is now interior and
+dominated completely -- likely bracketed, checked with a fine-grained pass
+here. rsi_period=12 now wins outright (the earlier bimodal pairing with 14
+resolved) -- added 10 to bracket it on both sides. rsi_exit gave identical
+Sharpe across 28/29/30 at every other-parameter combo tested (the RSI exit
+rarely fires before the stop does in this regime) -- fixed to save runtime.
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
@@ -91,16 +106,18 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [5.0, 5.5, 6.0, 6.5]  # pass 2: bimodal -- both edges (5.0, 6.5) won, interior didn't;
-# ambiguous direction, kept as-is for this pass
-RSI_ENTRY_GRID = [18, 19, 20, 21, 22]  # widened down further: pass 2's top result still hit 22, the lower edge
-RSI_EXIT_GRID = [28, 29, 30]  # pass 2: no edge signal; kept as-is
-SHORT_RSI_ENTRY_GRID = [62, 64, 66, 68]  # widened down further: pass 2's top result still hit 68, the lower edge
-SHORT_RSI_EXIT_GRID = [40, 45, 50, 55]  # widened up: pass 2's top result hit 45, the upper edge (in that regime)
-RSI_PERIOD_GRID = [12, 14]  # pass 2: no clear winner, two regimes emerged pairing differently with other levers; kept as-is
-RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0]  # CORRECTED direction: pass 2's ENTIRE top 15 sat at 3.0, the
-# *lower* edge of pass 2's [3.0..6.0] grid -- pass 2's widen-up guess was backwards (same mistake BTC's pass 3
-# made). Widening down instead.
+STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0, 5.5]  # widened down: pass 3's bimodal pattern resolved -- ALL top 15 now
+# at 5.0, the lower edge of pass 3's [5.0..6.5] grid; dropped 6.0/6.5 (clearly worse), widened down instead
+RSI_ENTRY_GRID = [14, 15, 16, 17, 18]  # widened down again: pass 3's top result still hit 18, the lower edge
+RSI_EXIT_GRID = [29]  # pass 3: 28/29/30 gave IDENTICAL Sharpe at every other-param combo (exit rarely fires
+# before the stop in this regime) -- fixed at 29 to save runtime
+SHORT_RSI_ENTRY_GRID = [62, 63, 64, 65, 66]  # fine bracket around 64, which is now interior (pass 3's grid was
+# [62..68]) and dominated completely -- checking it's a genuine peak, not just better than 62/66/68 specifically
+SHORT_RSI_EXIT_GRID = [50, 55, 60, 65]  # widened up: pass 3's ENTIRE top 15 sat at 55, the upper edge
+RSI_PERIOD_GRID = [10, 12, 14]  # pass 3: 12 now wins outright (previously bimodal with 14); added 10 to bracket
+# it properly on both sides
+RANGE_MAX_DISTANCE_PCT_GRID = [0.75, 1.0, 1.25, 1.5]  # widened down again: pass 3's ENTIRE top 15 sat at 1.5,
+# the lower edge -- SOL wants a much tighter range filter than any other coin tested so far
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
