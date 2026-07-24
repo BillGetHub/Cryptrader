@@ -13,13 +13,13 @@ Two free data sources are supported, picked with `--source`:
   discrepancy). It's also not subject to Yahoo's intraday history cap, though a
   long `--period` means more paginated API requests.
 
-Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24), found via
-`grid_search.py`: 79.8% win rate, +1.72% return, Sharpe +1.53, max drawdown
--0.42%, worst rolling 30d -0.30%, best rolling 30d +0.37% on BTC-USD 1h/730d.
-Sharpe and drawdown now clear CLAUDE.md's Success thresholds, but 30d return
-(+0.37% best) is far short of +5%/30d -- with only ~89 trades over 730 days
-and 0.5R risk per trade, this is a very safe configuration but structurally
-capped on absolute return. See CLAUDE.md for the full note.
+Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24): 76.3% win
+rate, +1.75% return, Sharpe +1.31, max drawdown -0.42%, worst rolling 30d
+-0.29%, best rolling 30d +0.38%, 114 trades on BTC-USD 1h/730d. Sharpe and
+drawdown now clear CLAUDE.md's Success thresholds, but 30d return (+0.38%
+best) is far short of +5%/30d -- even at 114 trades over 730 days with 0.5R
+risk per trade, this is a very safe configuration but structurally capped on
+absolute return. See CLAUDE.md for the full note.
 
 - Entry: RSI(14) < 28
 - Stop: 5.0% below entry
@@ -47,10 +47,13 @@ an-uptrend) rather than a refinement of RSI mean reversion.
 on) is the opposite hypothesis: RSI mean reversion tends to work best when price
 is *ranging* near its average and worst in strong trends either direction, so
 this only allows an entry (long or short) when price is within
-`--range-max-distance-pct` (default 2.5%) of the `--range-ma-period` (default
+`--range-max-distance-pct` (default 3.0%) of the `--range-ma-period` (default
 200) SMA -- filtering strong trends *out* instead of trading with them. This was
-the single biggest improvement found in this project (Sharpe +0.06 -> +1.53
-combined with the other baseline tuning).
+the single biggest improvement found in this project (Sharpe +0.06 -> +1.53 at
+2.5% distance, then widened to 3.0% to trade a little Sharpe for more trade
+frequency -> +1.31 Sharpe, 114 trades vs 89). Not a smooth tradeoff: 4% and 5%
+distance both dropped Sharpe well below 1.2 (0.25 and 0.57), so 3% is a
+verified local sweet spot, not the start of a predictable curve.
 
 ## Install
 
@@ -97,7 +100,7 @@ thresholds:
 | `--trend-ma-period` | `200` | SMA period in bars (only with `--enable-trend-filter`) |
 | `--enable-range-filter` | off | entries only within `--range-max-distance-pct` of the range SMA; part of the confirmed baseline when on |
 | `--range-ma-period` | `200` | SMA period in bars (only with `--enable-range-filter`) |
-| `--range-max-distance-pct` | `2.5` | max %% distance from the SMA allowed for an entry (only with `--enable-range-filter`) |
+| `--range-max-distance-pct` | `3.0` | max %% distance from the SMA allowed for an entry (only with `--enable-range-filter`) |
 | `--initial-balance` | `10000` | |
 | `--csv-out` | none | optional path to dump the equity curve |
 

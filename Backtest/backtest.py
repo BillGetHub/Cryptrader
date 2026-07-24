@@ -6,14 +6,15 @@ Size:  position_size_r percent of account balance risked per trade
 
 CLAUDE.md defines an entry and a stop but no exit target; --rsi-exit closes a
 position on RSI recovering back up, or the stop being hit. Defaults below are
-the confirmed baseline (CLAUDE.md, 2026-07-24): 79.8% win rate, +1.72% return,
-Sharpe +1.53, max drawdown -0.42%, worst rolling 30d -0.30%, best rolling 30d
-+0.37% on BTC-USD 1h/730d. --enable-short and --enable-range-filter reproduce
-the short leg and range filter that baseline includes; without them you get a
-smaller subset. Sharpe and drawdown now clear CLAUDE.md's Success thresholds,
-but 30d return (+0.37% best) is far short of +5%/30d -- with ~89 trades over
-730 days and 0.5R risk per trade, this is a very safe configuration but
-structurally capped on absolute return. See CLAUDE.md for the full note.
+the confirmed baseline (CLAUDE.md, 2026-07-24): 76.3% win rate, +1.75% return,
+Sharpe +1.31, max drawdown -0.42%, worst rolling 30d -0.29%, best rolling 30d
++0.38%, 114 trades on BTC-USD 1h/730d. --enable-short and --enable-range-filter
+reproduce the short leg and range filter that baseline includes; without them
+you get a smaller subset. Sharpe and drawdown now clear CLAUDE.md's Success
+thresholds, but 30d return (+0.38% best) is far short of +5%/30d -- even at
+114 trades over 730 days with 0.5R risk per trade, this is a very safe
+configuration but structurally capped on absolute return. See CLAUDE.md for
+the full note.
 
 Data can come from either source:
     --source yfinance (default): Yahoo Finance via the yfinance package.
@@ -398,7 +399,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--range-max-distance-pct",
         type=float,
-        default=2.5,
+        default=3.0,
         help="Max %% distance from the range SMA allowed for an entry (only with --enable-range-filter).",
     )
     parser.add_argument("--initial-balance", type=float, default=10000.0)

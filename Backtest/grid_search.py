@@ -7,20 +7,25 @@ no-network) simulation for every combination in the grid.
 
 A joint search combining --enable-short with --enable-range-filter (only
 trade when price is within X% of a 200-bar SMA -- i.e. filter OUT strong
-trends, since RSI mean reversion works best range-bound) found the confirmed
-baseline in CLAUDE.md (2026-07-24): 79.8% win rate, +1.72% return, Sharpe
-+1.53, max drawdown -0.42% on BTC-USD 1h/730d --
+trends, since RSI mean reversion works best range-bound) found a baseline
+with 89 trades and Sharpe +1.53 at 2.5% range distance. Manually widening
+the distance to trade a little Sharpe for more frequency found the current
+confirmed baseline in CLAUDE.md (2026-07-24): 76.3% win rate, +1.75% return,
+Sharpe +1.31, max drawdown -0.42%, 114 trades on BTC-USD 1h/730d --
     --rsi-entry 28 --rsi-exit 29 --stop-loss-pct 5.0
     --enable-short --short-rsi-entry 78 --short-rsi-exit 65
-    --enable-range-filter --range-ma-period 200 --range-max-distance-pct 2.5
-Sharpe and drawdown now clear CLAUDE.md's Success thresholds, but 30d return
-(+0.37% best) is far short of +5%/30d -- with only ~89 trades over 730 days
-and 0.5R risk per trade, this is a very safe configuration but structurally
-capped on absolute return (see CLAUDE.md for the full note; getting all
-three Success conditions at once likely needs more frequent trading or
-larger sizing, not just more threshold tuning). This grid is centered on
-that baseline for further tuning -- edit the *_GRID constants to widen or
-shift further.
+    --enable-range-filter --range-ma-period 200 --range-max-distance-pct 3.0
+Note this isn't a monotonic tradeoff: 4% and 5% distance both dropped Sharpe
+well below 1.2 (0.25 and 0.57) before 3% was found to be a local sweet spot,
+so don't assume "more distance = more trades = smoothly less Sharpe" holds
+outside the range already tested. Sharpe and drawdown clear CLAUDE.md's
+Success thresholds, but 30d return (+0.38% best) is far short of +5%/30d --
+even at 114 trades over 730 days with 0.5R risk per trade, this is a very
+safe configuration but structurally capped on absolute return (see CLAUDE.md
+for the full note; getting all three Success conditions at once likely needs
+more frequent trading still or larger sizing, not just more threshold
+tuning). This grid is centered on the current baseline for further tuning --
+edit the *_GRID constants to widen or shift further.
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -45,7 +50,7 @@ RSI_EXIT_GRID = [28, 29, 30]
 SHORT_RSI_ENTRY_GRID = [76, 78, 80]
 SHORT_RSI_EXIT_GRID = [62, 65, 68]
 RSI_PERIOD_GRID = [12, 14]
-RANGE_MAX_DISTANCE_PCT_GRID = [2.0, 2.5, 3.0]
+RANGE_MAX_DISTANCE_PCT_GRID = [2.5, 3.0, 3.5]
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand; not swept here
 
 SORT_KEYS = {

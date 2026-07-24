@@ -36,7 +36,7 @@ Stop : 5.0%
 Size : 0.5R
 RSI period : 14
 
-Range filter: only enter (long or short) when price is within 2.5% of its 200-bar SMA --
+Range filter: only enter (long or short) when price is within 3.0% of its 200-bar SMA --
 i.e. skip strong trending conditions. RSI mean reversion tends to work best range-bound and
 worst in strong trends either direction; a trade-with-the-trend filter was tested and hurt
 results (see Backtest/README.md), this range filter is the opposite idea and helped a lot.
@@ -46,19 +46,25 @@ Entry : rsi > 78
 Exit : rsi <= 65
 Stop : 5.0% above entry
 
-Baseline confirmed 2026-07-24, backtested on BTC-USD 1h, 730d (yfinance) via Backtest/grid_search.py:
-79.8% win rate, +1.72% return, Sharpe +1.53, max drawdown -0.42%, worst rolling 30d -0.30%,
-best rolling 30d +0.37%. Clears all Failure conditions and now Sharpe/drawdown clear Success
-too, but 30d return (+0.37% best) is far short of the +5%/30d Success bar -- with only ~89
-trades over 730 days and 0.5R risk per trade, this configuration is very safe (hence the high
-Sharpe) but structurally capped on absolute return. Getting all three Success conditions at
-once likely needs either more frequent trading or larger position sizing, not just more
-threshold tuning -- flagged for the project owner to decide before further amendments.
+Baseline confirmed 2026-07-24, backtested on BTC-USD 1h, 730d (yfinance) via Backtest/backtest.py:
+76.3% win rate, +1.75% return, Sharpe +1.31, max drawdown -0.42%, worst rolling 30d -0.29%,
+best rolling 30d +0.38%, 114 trades. Clears all Failure conditions and Sharpe/drawdown clear
+Success too, but 30d return (+0.38% best) is still far short of the +5%/30d Success bar --
+even at 114 trades over 730 days with 0.5R risk per trade, this configuration is very safe
+(hence the high Sharpe) but structurally capped on absolute return. Getting all three Success
+conditions at once likely needs either more frequent trading or larger position sizing, not
+just more threshold tuning -- flagged for the project owner to decide before further
+amendments. Range distance was widened from 2.5% specifically to trade a little Sharpe for
+more frequency (2.5% gave Sharpe +1.53 but only 89 trades); 4% and 5% were also tested and
+both dropped Sharpe well below the 1.2 bar (0.25 and 0.57), so 3% is not a monotonic
+midpoint -- it's a locally verified sweet spot, not the start of a smooth curve.
 
 Previous baselines (kept for traceability):
 1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
 2. Win-rate-focused, cleared Failure only: Entry rsi<27, Exit rsi>=30, Stop 4.5%, Short entry
    rsi>78 exit rsi<=62 stop 4.5%, no range filter -- 71.5% win rate, Sharpe +0.06.
+3. First Success-clearing baseline, same as above but range filter at 2.5% instead of 3.0% --
+   79.8% win rate, Sharpe +1.53, only 89 trades.
 
 Improve the strategy after backtest the strategy with scientific approach, i.e., change one variable at a time and verify if the result is better with the particular variable change.
 
