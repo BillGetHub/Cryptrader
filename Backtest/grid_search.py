@@ -34,9 +34,11 @@ contains (see VALIDATED_PARAMETERS.md for full per-coin detail, including
 why BTC uses --enable-atr-stop, not swept here, and ETH does not). ETH's
 tuning found its optimum far from BTC's on short_rsi_exit (45 vs 65) --
 proof this is a genuinely asset-specific lever, not just tuning noise. As of
-2026-07-24 the grid is widened back out to cover the union of both coins'
-known optima (plus margin) as a neutral starting point for tuning a new
-coin, e.g. BNBUSDT via --source ccxt --exchange binance.
+2026-07-24 the grid is narrowed/widened for BNBUSDT: its first pass (grid
+centered on the BTC/ETH union) hit the edge on rsi_entry, rsi_exit,
+rsi_period, and range_max_distance_pct, so those widen further; stop_loss_pct,
+short_rsi_entry, and short_rsi_exit landed interior for BNB and are narrowed
+back down around those confirmed values to keep runtime reasonable.
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -55,13 +57,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [3.5, 4.0, 4.5, 5.0]
-RSI_ENTRY_GRID = [27, 28]
-RSI_EXIT_GRID = [29, 30]
-SHORT_RSI_ENTRY_GRID = [74, 76, 78, 80]
-SHORT_RSI_EXIT_GRID = [45, 50, 55, 60, 65]  # wide: BTC's optimum (65) and ETH's (45) are far apart
-RSI_PERIOD_GRID = [12, 14]  # BTC's optimum (14) and ETH's (12); widened back out for a new coin
-RANGE_MAX_DISTANCE_PCT_GRID = [2.5, 3.0]
+STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0]  # 4.5 confirmed interior for BNB; narrowed to save runtime
+RSI_ENTRY_GRID = [25, 26, 27, 28]  # widened down: BNB's first pass hit 27, the lower edge
+RSI_EXIT_GRID = [29, 30, 31, 32]  # widened up: BNB's first pass hit 30, the upper edge
+SHORT_RSI_ENTRY_GRID = [74, 76, 78]  # 76 confirmed interior for BNB; narrowed to save runtime
+SHORT_RSI_EXIT_GRID = [45, 50, 55]  # 50 confirmed interior for BNB; narrowed to save runtime
+RSI_PERIOD_GRID = [10, 12]  # BNB's first pass hit 12, the lower edge (consistent with ETH); 14 dropped as unlikely
+RANGE_MAX_DISTANCE_PCT_GRID = [3.0, 3.5, 4.0]  # widened up: BNB's first pass hit 3.0, the upper edge
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
