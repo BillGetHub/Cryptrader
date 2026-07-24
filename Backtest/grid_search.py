@@ -27,20 +27,29 @@ more frequent trading still or larger sizing, not just more threshold
 tuning).
 
 The *_GRID constants below are edited freely as tuning moves to new assets or
-regions -- they are a scratch workspace, not a record. BTC's and ETH's
-confirmed baselines are recorded permanently in CLAUDE.md and
+regions -- they are a scratch workspace, not a record. BTC's, ETH's, and
+BNB's confirmed baselines are recorded permanently in CLAUDE.md and
 Backtest/VALIDATED_PARAMETERS.md regardless of what the grid currently
-contains (see VALIDATED_PARAMETERS.md for full per-coin detail, including
-why BTC uses --enable-atr-stop, not swept here, and ETH does not). ETH's
-tuning found its optimum far from BTC's on short_rsi_exit (45 vs 65) --
-proof this is a genuinely asset-specific lever, not just tuning noise. As of
-2026-07-24 the grid has gone through two widening passes for BNBUSDT: the
-first (grid centered on the BTC/ETH union) hit the edge on rsi_entry,
-rsi_exit, rsi_period, and range_max_distance_pct; the second (after
-narrowing those and widening further) already cleared Sharpe/drawdown
-Success at Sharpe +1.51, but then hit the edge again on stop_loss_pct,
-rsi_exit, short_rsi_entry, and short_rsi_exit -- this third pass widens
-those further while fixing rsi_period at its now twice-confirmed peak (12).
+contains (see VALIDATED_PARAMETERS.md for full per-coin detail). ETH's and
+BNB's tuning both found their optimum far from BTC's on short_rsi_exit (45
+vs BTC's 65) and rsi_period (12 vs BTC's 14) -- proof these are genuinely
+asset-specific levers, not just tuning noise.
+
+As of 2026-07-24 the grid is re-centered for a fresh BTC pass: the
+multi-asset portfolio test surfaced that BTC's confirmed baseline (tuned and
+validated only on Yahoo's BTC-USD) drops from Sharpe +1.38 to +0.59 when its
+exact parameters are re-run on genuine Binance BTCUSDT data -- no longer
+clearing the >=1.2 Success bar. BTC has never been tuned directly on
+Binance, unlike ETH and BNB. This pass searches a space centered on BTC's
+known Yahoo-tuned optimum (28/29/5.0/78/65/14/3.0) but wide enough either
+side to let Binance's genuinely different price data find its own optimum,
+the same way ETH's and BNB's grids started centered on a known region and
+then widened toward wherever the edge-hits pointed. Note this grid does not
+sweep --enable-atr-stop (matching how ETH/BNB were tuned) -- the plan is to
+find the best fixed-stop config here first, then test adding ATR-stop on
+top as a follow-up, mirroring exactly how the original Yahoo-data ATR-stop
+win was discovered (found after the fixed-stop baseline, not as part of the
+initial joint search).
 
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
@@ -59,13 +68,13 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.5, 5.0, 5.5, 6.0]  # widened up: BNB's 2nd pass hit 5.0, the upper edge
-RSI_ENTRY_GRID = [26, 27, 28]  # 27 confirmed interior for BNB in the 2nd pass; narrowed to save runtime
-RSI_EXIT_GRID = [28, 29, 30]  # widened down: BNB's 2nd pass hit 29, the lower edge
-SHORT_RSI_ENTRY_GRID = [78, 80, 82]  # widened up: BNB's 2nd pass hit 78, the upper edge
-SHORT_RSI_EXIT_GRID = [35, 40, 45]  # widened down: BNB's 2nd pass hit 45, the lower edge
-RSI_PERIOD_GRID = [12]  # confirmed peak for BNB across both passes (10 and 14 both worse); fixed to save runtime
-RANGE_MAX_DISTANCE_PCT_GRID = [4.0, 4.5, 5.0]  # widened up: BNB's 2nd pass hit 4.0, the upper edge
+STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0, 5.5, 6.0]  # centered on BTC's Yahoo-tuned 5.0
+RSI_ENTRY_GRID = [26, 27, 28, 29]  # centered on BTC's Yahoo-tuned 28
+RSI_EXIT_GRID = [28, 29, 30, 31]  # centered on BTC's Yahoo-tuned 29
+SHORT_RSI_ENTRY_GRID = [74, 76, 78, 80]  # centered on BTC's Yahoo-tuned 78
+SHORT_RSI_EXIT_GRID = [45, 55, 65, 75]  # spans both BTC's Yahoo-tuned 65 and ETH/BNB's 45
+RSI_PERIOD_GRID = [12, 14]  # BTC's Yahoo-tuned 14 vs ETH/BNB's shared 12 -- genuinely unknown for BTC/Binance
+RANGE_MAX_DISTANCE_PCT_GRID = [2.5, 3.0, 3.5, 4.0]  # centered on BTC's Yahoo-tuned 3.0
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
