@@ -55,6 +55,13 @@ frequency -> +1.31 Sharpe, 114 trades vs 89). Not a smooth tradeoff: 4% and 5%
 distance both dropped Sharpe well below 1.2 (0.25 and 0.57), so 3% is a
 verified local sweet spot, not the start of a predictable curve.
 
+`--enable-atr-stop` (off by default) replaces the fixed `--stop-loss-pct` stop
+with one sized off recent volatility: stop distance = `--atr-multiplier` *
+ATR(`--atr-period`) at entry, instead of the same fixed percentage regardless
+of how calm or volatile the market currently is. A well-documented risk-
+management technique; not yet benchmarked against the fixed-percentage stop on
+real data.
+
 ## Install
 
 ```bash
@@ -101,6 +108,9 @@ thresholds:
 | `--enable-range-filter` | off | entries only within `--range-max-distance-pct` of the range SMA; part of the confirmed baseline when on |
 | `--range-ma-period` | `200` | SMA period in bars (only with `--enable-range-filter`) |
 | `--range-max-distance-pct` | `3.0` | max %% distance from the SMA allowed for an entry (only with `--enable-range-filter`) |
+| `--enable-atr-stop` | off | volatility-adjusted stop instead of the fixed `--stop-loss-pct` |
+| `--atr-period` | `14` | ATR period in bars (only with `--enable-atr-stop`) |
+| `--atr-multiplier` | `2.0` | stop distance as a multiple of ATR (only with `--enable-atr-stop`) |
 | `--initial-balance` | `10000` | |
 | `--csv-out` | none | optional path to dump the equity curve |
 
@@ -149,10 +159,60 @@ position can open and then immediately satisfy the exit condition on the next
 bar, producing a flood of near-instant whipsaw trades that look like more
 data but are actually noise -- trade count spikes and every metric gets worse.
 
+## Alternative strategies
+
+Three more scripts, built to test whether a genuinely different approach beats
+threshold-tuning the RSI signal further. None of these have been benchmarked
+against real data yet -- verified only on synthetic data (mechanics correct,
+no crashes, entries respect their own rules). Run them and compare their
+printed metrics against the RSI baseline above using the same CLAUDE.md
+Success/Failure thresholds.
+
+**`trend_strategy.py`** -- classic fast/slow moving-average crossover trend
+following. Genuinely complementary to the RSI approach rather than a variant
+of it: the range filter above specifically *excludes* trending periods, so
+this strategy trades exactly the conditions RSI mean reversion sits out.
+Long while the fast SMA is above the slow SMA, short (opt-in) while below,
+exit on trend flip or stop hit.
+
+```bash
+python trend_strategy.py --symbol BTC-USD --interval 1h --period 730d
+python trend_strategy.py --fast-ma-period 20 --slow-ma-period 50 --enable-short
+```
+
+**`bollinger_strategy.py`** -- Bollinger Band mean reversion, an alternative
+math family to RSI for the same "buy oversold, sell overbought" idea: entries
+are measured in standard deviations from a rolling average instead of RSI's
+momentum oscillator. Long when price closes below the lower band, short
+(opt-in) above the upper band, exit on reversion to the middle band or stop
+hit.
+
+```bash
+python bollinger_strategy.py --symbol BTC-USD --interval 1h --period 730d
+python bollinger_strategy.py --bb-period 20 --bb-std-mult 2.0 --enable-short
+```
+
+**`multi_asset.py`** -- runs the confirmed RSI+range-filter strategy
+independently across several pairs (BTC/ETH/SOL by default) with capital split
+evenly, then combines the daily-resampled equity curves into one portfolio.
+Tests diversification rather than a new signal: spreading the same edge across
+less-than-perfectly-correlated assets can raise portfolio Sharpe without
+raising any single position's risk. Note the portfolio Sharpe is computed on
+*daily* returns (different pairs' fetched bars don't align hour-to-hour), so
+it isn't directly comparable to `backtest.py`'s hourly Sharpe -- compare each
+symbol's own per-asset Sharpe in the printed breakdown instead for an apples-
+to-apples check against the single-asset baseline.
+
+```bash
+python multi_asset.py --interval 1h --period 730d
+python multi_asset.py --source ccxt --exchange kraken --symbols "BTC/USD,ETH/USD,SOL/USD" --enable-short --enable-range-filter
+```
+
 ## Known limitation in this environment
 
 Neither Yahoo Finance nor Kraken's public API is reachable through this sandbox's
 outbound network policy (both return a proxy 403), regardless of `--source`. The
-simulation, metrics, and ccxt pagination logic are all verified against synthetic
-OHLC data instead. Run this script somewhere with unrestricted internet access
-(or adjust the environment's network policy) to fetch real data.
+simulation, metrics, and ccxt pagination logic -- for `backtest.py` and all three
+alternative-strategy scripts above -- are all verified against synthetic OHLC
+data instead. Run these somewhere with unrestricted internet access (or adjust
+the environment's network policy) to fetch real data.

@@ -65,6 +65,14 @@ def compute_rsi(closes: pd.Series, period: int) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
+def compute_atr(df: pd.DataFrame, period: int) -> pd.Series:
+    prev_close = df["Close"].shift(1)
+    true_range = pd.concat(
+        [df["High"] - df["Low"], (df["High"] - prev_close).abs(), (df["Low"] - prev_close).abs()], axis=1
+    ).max(axis=1)
+    return true_range.ewm(alpha=1 / period, min_periods=period).mean()
+
+
 def fetch_data_yfinance(symbol: str, interval: str, period: str) -> pd.DataFrame:
     df = yf.download(symbol, interval=interval, period=period, auto_adjust=True, progress=False)
     if df.empty:
@@ -135,6 +143,9 @@ def simulate(
     enable_range_filter: bool = False,
     range_ma_period: int = 200,
     range_max_distance_pct: float = 5.0,
+    enable_atr_stop: bool = False,
+    atr_period: int = 14,
+    atr_multiplier: float = 2.0,
 ) -> dict:
     """Long entries fire on RSI < rsi_entry, exit on RSI >= rsi_exit (or stop below entry).
     Short entries (opt-in) fire on RSI > short_rsi_entry, exit on RSI <= short_rsi_exit
@@ -151,6 +162,11 @@ def simulate(
     direction, so this only allows entries (long or short) when price is within
     range_max_distance_pct of the range_ma_period-bar SMA -- filtering out strong trends
     instead of trading with them.
+
+    enable_atr_stop (opt-in) replaces the fixed stop_loss_pct stop with a volatility-
+    adjusted one: stop_distance = atr_multiplier * ATR(atr_period) at entry, so the stop
+    (and therefore position size) adapts to how volatile the market currently is instead
+    of using the same fixed percentage regardless of conditions.
 
     Uses raw numpy arrays instead of DataFrame.iloc in the per-bar loop -- .iloc lookups
     dominate runtime when this is called hundreds of times in grid_search.py.
@@ -171,6 +187,11 @@ def simulate(
         range_ma = df["Close"].rolling(range_ma_period).mean().to_numpy(dtype=np.float64)
     else:
         range_ma = None
+
+    if enable_atr_stop:
+        atr = compute_atr(df, atr_period).to_numpy(dtype=np.float64)
+    else:
+        atr = None
 
     balance = initial_balance
     equity = np.empty(n, dtype=np.float64)
@@ -226,19 +247,27 @@ def simulate(
                 ma = range_ma[i]
                 range_ok = not np.isnan(ma) and abs(close - ma) / ma * 100 <= range_max_distance_pct
 
+            atr_ok = True
+            if enable_atr_stop:
+                atr_ok = not np.isnan(atr[i])
+
             new_direction = None
-            if r < rsi_entry and trend_ok_long and range_ok:
+            if r < rsi_entry and trend_ok_long and range_ok and atr_ok:
                 new_direction = "long"
-            elif enable_short and r > short_rsi_entry and trend_ok_short and range_ok:
+            elif enable_short and r > short_rsi_entry and trend_ok_short and range_ok and atr_ok:
                 new_direction = "short"
 
             if new_direction is not None:
                 candidate_entry_price = close
+                if enable_atr_stop:
+                    stop_offset = atr_multiplier * atr[i]
+                else:
+                    stop_offset = candidate_entry_price * stop_loss_pct / 100
                 if new_direction == "long":
-                    candidate_stop_price = candidate_entry_price * (1 - stop_loss_pct / 100)
+                    candidate_stop_price = candidate_entry_price - stop_offset
                     stop_distance = candidate_entry_price - candidate_stop_price
                 else:
-                    candidate_stop_price = candidate_entry_price * (1 + stop_loss_pct / 100)
+                    candidate_stop_price = candidate_entry_price + stop_offset
                     stop_distance = candidate_stop_price - candidate_entry_price
                 candidate_risk_amount = balance * position_size_r / 100
                 candidate_size = candidate_risk_amount / stop_distance if stop_distance > 0 else 0.0
@@ -402,6 +431,19 @@ def parse_args() -> argparse.Namespace:
         default=3.0,
         help="Max %% distance from the range SMA allowed for an entry (only with --enable-range-filter).",
     )
+    parser.add_argument(
+        "--enable-atr-stop",
+        action="store_true",
+        help="Replace the fixed --stop-loss-pct stop with a volatility-adjusted one: "
+        "stop distance = --atr-multiplier * ATR(--atr-period) at entry. Off by default.",
+    )
+    parser.add_argument("--atr-period", type=int, default=14, help="ATR period in bars (only with --enable-atr-stop).")
+    parser.add_argument(
+        "--atr-multiplier",
+        type=float,
+        default=2.0,
+        help="Stop distance as a multiple of ATR (only with --enable-atr-stop).",
+    )
     parser.add_argument("--initial-balance", type=float, default=10000.0)
     parser.add_argument("--csv-out", default=None, help="optional path to write the equity curve as CSV")
     args = parser.parse_args()
@@ -430,6 +472,9 @@ def main() -> None:
         enable_range_filter=args.enable_range_filter,
         range_ma_period=args.range_ma_period,
         range_max_distance_pct=args.range_max_distance_pct,
+        enable_atr_stop=args.enable_atr_stop,
+        atr_period=args.atr_period,
+        atr_multiplier=args.atr_multiplier,
     )
     metrics = compute_metrics(
         result["equity"], result["trades"], args.initial_balance, INTERVAL_BARS_PER_YEAR[args.interval]
@@ -443,7 +488,10 @@ def main() -> None:
     print(f"RSI long entry/exit: <{args.rsi_entry} / >={args.rsi_exit}")
     if args.enable_short:
         print(f"RSI short entry/exit: >{args.short_rsi_entry} / <={args.short_rsi_exit}")
-    print(f"Stop / Size:         {args.stop_loss_pct}% / {args.position_size_r}R")
+    if args.enable_atr_stop:
+        print(f"Stop / Size:         ATR({args.atr_period})x{args.atr_multiplier} / {args.position_size_r}R")
+    else:
+        print(f"Stop / Size:         {args.stop_loss_pct}% / {args.position_size_r}R")
     if args.enable_trend_filter:
         print(f"Trend filter:        on, {args.trend_ma_period}-bar SMA")
     if args.enable_range_filter:
