@@ -66,6 +66,14 @@ Backtest/README.md for details. The ATR-stop win suggests the remaining gap to f
 is more likely closable through refining risk mechanics (like this) than through a wholesale
 different signal.
 
+ETHUSDT confirmed baseline (2026-07-24, backtested via ccxt/Binance -- yfinance has no
+ETH-USDT ticker, Kraken's ccxt pagination caps around 30 days): 78.1% win rate, +3.55%
+return, Sharpe +1.25, max drawdown -2.64%, 105 trades. Tuned independently, not copied from
+BTC -- BTC's exact parameters breach the Sharpe<0 Failure condition when reused unchanged on
+ETH. ETH's optimal shape differs genuinely from BTC's: no ATR-stop (every ATR variant tested
+made ETH worse, the opposite of BTC), RSI period 12 not 14, short-exit 45 not 65. Full detail
+and every parameter set tested for both coins: Backtest/VALIDATED_PARAMETERS.md.
+
 Previous baselines (kept for traceability):
 1. Original spec, never cleared Failure: Entry rsi<25, Exit rsi>=50, Stop 1.4%, no short.
 2. Win-rate-focused, cleared Failure only: Entry rsi<27, Exit rsi>=30, Stop 4.5%, Short entry

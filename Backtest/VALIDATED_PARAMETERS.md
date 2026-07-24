@@ -2,20 +2,30 @@
 
 A catalog of every tested configuration from this project's tuning history with
 **win rate >= 70%**, for reuse when exploring other coins, other strategies, or
-improved versions. All numbers below come from real backtests (BTC-USD, 1h
-candles, 730-day window, via `yfinance`) run and pasted during actual sessions --
-nothing here is estimated or re-derived from memory.
+improved versions. All numbers below come from real backtests (1h candles,
+730-day window) run and pasted during actual sessions -- nothing here is
+estimated or re-derived from memory.
 
-**Important scope note:** every parameter set below was tuned specifically for
-BTC-USD's behavior over this exact 2024-2026 window. When this project's own
-confirmed baseline was reused unchanged on ETH-USD and SOL-USD (see
-`multi_asset.py` results below), it failed on both -- these numbers are a
-starting point for other coins, not a drop-in. Re-run the tuning process
-(`grid_search.py`, then hand-tune) per asset.
+**Important scope note:** parameters tuned for one coin do not transfer to
+another. BTCUSDT's confirmed baseline reused unchanged on ETH-USD and SOL-USD
+(see "Tested and discarded" below) failed on both -- and ETHUSDT's own tuned
+baseline (below) uses a genuinely different strategy shape than BTC's (no
+ATR-stop, shorter RSI period, a much lower short-exit threshold). Each new
+coin needs its own run through the tuning process (`grid_search.py`, then
+hand-tune), not a copy of another coin's numbers.
+
+**Data source note:** BTCUSDT results below were fetched as `BTC-USD` via
+`yfinance` (Yahoo has no `BTC-USDT` ticker). ETHUSDT results were fetched as
+genuine `ETH/USDT` via `--source ccxt --exchange binance` (Yahoo has no
+`ETH-USDT` ticker either, and Kraken's ccxt pagination caps out around 30
+days -- Binance has neither limitation, confirmed 2026-07-24). See
+`Backtest/README.md` for the full symbol-normalization and data-source notes.
 
 CLAUDE.md's Success/Failure thresholds, for reference:
 - **Success**: return >= +5%/30d, Sharpe >= 1.2, drawdown <= 8%
 - **Failure**: drawdown > 8%, return < -4%/30d, Sharpe < 0
+
+# BTCUSDT
 
 ## The one configuration that passed full Success
 
@@ -109,7 +119,7 @@ worst 30d -0.84%, best 30d +1.05%. Clears Failure only -- Sharpe far short of
 variable tuning alone (without the range filter) couldn't get Sharpe higher
 than this.
 
-## Tested and discarded (win rate >= 70%, but breaches a Failure condition)
+## BTCUSDT: tested and discarded (win rate >= 70%, but breaches a Failure condition)
 
 ### Naive multi-asset diversification (BTC/ETH/SOL, BTC-tuned parameters reused unchanged)
 ```
@@ -121,10 +131,10 @@ Combined portfolio: 70.8% win rate (>=70%, qualifies on that filter alone),
 condition)**, max drawdown -0.86%. Per-asset breakdown: BTC-USD alone matched
 its own baseline exactly (76.3% win, Sharpe +1.31), but ETH-USD (Sharpe -0.67)
 and SOL-USD (Sharpe -1.62) both did badly with BTC's tuned numbers, dragging
-the combined Sharpe negative. This is a curve-fitting lesson, not proof
-diversification doesn't work -- no ETH/SOL-specific tuning was attempted.
+the combined Sharpe negative. This is the curve-fitting lesson that motivated
+tuning ETHUSDT properly on its own -- see below.
 
-## Strategies tested with win rate well under 70% (ruled out at default settings)
+## BTCUSDT: strategies well under 70% win rate (ruled out at default settings)
 
 Recorded so future sessions don't have to re-discover these are dead ends at
 these settings -- none were deeply tuned, so a tuned version might behave
@@ -137,6 +147,61 @@ justify the effort.
 | Bollinger Bands | `--bb-period 20 --bb-std-mult 2.0 --enable-short` | 63.7% | -0.30 | -5.18% | Breaches Sharpe Failure |
 | Original CLAUDE.md spec | `--rsi-entry 25 --rsi-exit 50 --stop-loss-pct 1.4` (no short, no filters) | 35.4% | -0.76 | -12.40% | Breaches all 3 Failure conditions |
 
+# ETHUSDT
+
+## Confirmed baseline (2026-07-24)
+
+Tuned independently from BTC via `grid_search.py` (grid shifted/widened once
+BTC's ranges hit an edge on 4 parameters) then hand-bracketed, the same
+process used for BTC. Notably **does not** use ATR-stop -- every ATR
+variant tested made ETH's Sharpe worse, the opposite of what ATR-stop did
+for BTC.
+
+```
+--rsi-entry 28 --rsi-exit 29 --rsi-period 12 --stop-loss-pct 4.5
+--enable-short --short-rsi-entry 76 --short-rsi-exit 45
+--enable-range-filter --range-ma-period 200 --range-max-distance-pct 2.5
+```
+
+| Metric | Value | vs. threshold |
+|---|---|---|
+| Win rate | 78.1% | -- |
+| Trades | 105 (long 74, short 31) | -- |
+| Total return (730d) | +3.55% | -- |
+| Sharpe | +1.25 | clears >=1.2 |
+| Max drawdown | -2.64% | clears <=8% |
+| Worst rolling 30d | -1.53% | safe (Failure line is -4%) |
+| Best rolling 30d | +1.33% | short of +5% target |
+
+Same shape of result as BTC's journey: clears Sharpe and drawdown for
+Success, still short on the 30-day return leg. Fetched via
+`--source ccxt --exchange binance --symbol ETHUSDT` (genuine USDT pair, full
+730-day history).
+
+### What was tried and discarded reaching this baseline
+- **Reusing BTC's exact tuned parameters unchanged**: 63.0% win rate (yfinance
+  ETH-USD proxy) / 62.2% (genuine Binance ETH/USDT) -- both **breach the
+  Sharpe < 0 Failure condition** (-0.05 and -0.11 respectively). Confirmed
+  BTC's numbers don't transfer; motivated the independent tuning above.
+- **ATR-stop on the ETH-tuned base** (ATR(21)x2.0, ATR(14)x2.0, ATR(21)x3.0):
+  all three underperformed the plain fixed-percentage stop (Sharpe 0.46, 0.39,
+  0.31 respectively, vs 0.83 for the fixed-stop grid result at the time).
+  Fixed stop is genuinely better for ETH, not just an untried lever.
+- **`--short-rsi-exit`** was bracketed through 54 (Sharpe 1.186) -> 51 (1.01,
+  a non-monotonic dip) -> 48 (1.19) -> **45 (1.25, the peak)** -> 40 (0.94,
+  confirms the peak). This single lever took Sharpe from 0.83 to 1.25.
+- **Trend-following** (`--fast-ma-period 20 --slow-ma-period 50 --enable-short`
+  on Binance ETH/USDT): 455 trades, 36.5% win rate, Sharpe -0.16, max drawdown
+  **-11.30%** -- breaches 3 Failure conditions at once (worse than on BTC).
+- **Bollinger Bands** (`--bb-period 20 --bb-std-mult 2.0 --enable-short` on
+  Binance ETH/USDT): 757 trades, 63.8% win rate, Sharpe -0.77, max drawdown
+  -9.16% -- breaches 2 Failure conditions.
+
+Both alternative signals failed harder on ETH than on BTC (more trades,
+deeper drawdowns) -- reinforces that the range-filtered RSI mean-reversion
+approach fits this market's actual behavior, rather than being an accident
+of BTC-specific tuning.
+
 ## Tools to reproduce or extend any of this
 
 - `Backtest/backtest.py` -- the RSI+range-filter+ATR-stop strategy (single run)
@@ -144,11 +209,14 @@ justify the effort.
 - `Backtest/trend_strategy.py`, `Backtest/bollinger_strategy.py` -- alternative signals
 - `Backtest/multi_asset.py` -- portfolio runner across multiple symbols
 
-All support `--source ccxt --exchange <id> --symbol <PAIR>` for other coins,
-though note Kraken's ccxt pagination is capped at ~30 days of history (see
-`Backtest/README.md` "Known gotcha") -- use `--source yfinance` for full-
-history backtests on other coins. As of 2026-07-24 the default/recommended
-symbol format is a bare pair like `ETHUSDT` or `SOLUSDT` (auto-normalized per
-source internally) rather than `BTC-USD`/`BTC/USD` used to produce the
-historical results above -- see `Backtest/README.md` for the normalization
-details and the (unverified against live data) yfinance USDT-ticker caveat.
+All support `--source ccxt --exchange <id> --symbol <PAIR>` for other coins.
+**Confirmed 2026-07-24: `--exchange binance` has none of Kraken's ~30-day
+pagination cap** -- it delivers the full 730-day window for genuine USDT
+pairs (used to produce all the ETHUSDT results above). Kraken remains capped
+at ~30 days; yfinance has no `*-USDT` tickers at all, only fiat pairs like
+`ETH-USD` (confirmed by a live 404). Recommended per-source symbol pattern:
+`--source ccxt --exchange binance --symbol <COIN>USDT` for genuine full-
+history USDT data, or `--source yfinance --symbol <COIN>-USD` as a close
+fiat proxy if Binance access isn't available -- see `Backtest/README.md` for
+the full normalization details and the ETH-USD-vs-ETH/USDT cross-check that
+validated the proxy is reasonable.
