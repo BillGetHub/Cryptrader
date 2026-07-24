@@ -18,17 +18,25 @@ Two free data sources are supported, picked with `--source`:
   ~720 candles regardless of the requested `since` (confirmed 2026-07-24:
   requesting 730 days of 1h data returned only ~721 bars, i.e. ~30 days). Use
   `--source ccxt --exchange kraken` for short lookback windows or live/recent
-  signals only -- for a full 730-day backtest, `--source yfinance` is
-  currently the only source that actually delivers it. A different ccxt
-  exchange (e.g. Binance) might not have this limitation, untested here.
+  signals only. **`--exchange binance` does not have this limitation**
+  (confirmed 2026-07-24: `--symbol ETHUSDT --period 730d --interval 1h`
+  returned exactly 17,520 bars, i.e. the full 730 days) -- use it for full-
+  history backtests on genuine USDT pairs. `bot.py` still targets Kraken for
+  live trading; this only affects which source to backtest against.
 
 `--symbol` defaults to a bare pair like `BTCUSDT` -- it's auto-normalized to
 whatever separator each source needs (`BTC-USDT` for yfinance, `BTC/USDT` for
 ccxt) before being used, so the same bare symbol works with either `--source`.
-A symbol that already contains `/` or `-` is left untouched. Note: yfinance's
-support for `BTC-USDT` specifically (vs. the fiat `BTC-USD`) hasn't been
-confirmed against live data in this session -- if it 404s or returns empty,
-try `--symbol BTC-USD` explicitly as a fallback for that source.
+A symbol that already contains `/` or `-` is left untouched. **Confirmed
+gotcha (2026-07-24):** yfinance has no `ETH-USDT` ticker (404s) -- only fiat
+tickers like `ETH-USD` exist there. For yfinance, pass the fiat pair
+explicitly (e.g. `--symbol ETH-USD`) rather than relying on auto-
+normalization; for genuine USDT pairs with full history, use
+`--source ccxt --exchange binance` instead. ETH-USD (yfinance) and ETH/USDT
+(Binance) were cross-checked on the same BTC-tuned strategy and produced
+near-identical results (win rate 63.0% vs 62.2%, Sharpe -0.05 vs -0.11) --
+USDT tracks USD closely enough that the fiat pair is a reasonable backtesting
+proxy when a real USDT ticker isn't available on a given source.
 
 Defaults reflect the confirmed baseline in CLAUDE.md (2026-07-24): 74.0% win
 rate, +8.01% return, Sharpe +1.38, max drawdown -1.84%, worst rolling 30d
