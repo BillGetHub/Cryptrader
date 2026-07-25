@@ -8,6 +8,16 @@ if a future coin's short side is worth tuning here, add it then rather than
 now, since SOL's whole point in reaching this file is finding a genuine
 long-only edge.
 
+Pass 1 (288 combos, SOLUSDT) topped out at Sharpe +0.32 -- still far below the
+1.2 Success bar, but exit_threshold (40, lower edge) and stop_loss_pct (7.0,
+upper edge) both hit their grid boundary, so it wasn't fully bracketed.
+entry_threshold=20 was interior (won over 15/25); stoch_period leaned toward
+its lower edge (10) narrowly. Pass 2 (this grid) widens exit_threshold down
+and stop_loss_pct up, narrows entry_threshold/stoch_period to their
+confirmed-good range, and checks stoch_period=7. Given the ceiling is this
+far from 1.2, this pass is about confirming the search is genuinely
+exhausted, not expecting it to reach Success.
+
 Usage:
     python stochastic_grid_search.py --symbol SOLUSDT --source ccxt --exchange binance
     python stochastic_grid_search.py --sort-by sharpe --top-n 20
@@ -21,11 +31,11 @@ import pandas as pd
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data
 from stochastic_strategy import simulate_stochastic
 
-STOCH_PERIOD_GRID = [10, 14, 21]
-STOCH_SMOOTH_GRID = [3, 5]
-STOCH_ENTRY_GRID = [10, 15, 20, 25]
-STOCH_EXIT_GRID = [40, 50, 60, 80]
-STOP_LOSS_PCT_GRID = [3.0, 5.0, 7.0]
+STOCH_PERIOD_GRID = [7, 10, 14]  # narrowed: 21 clearly lost in pass 1; added 7 since 10 (lower edge) narrowly won
+STOCH_SMOOTH_GRID = [3, 5]  # pass 1: 3 dominated; kept both
+STOCH_ENTRY_GRID = [15, 20, 25]  # narrowed: 10 never appeared in pass 1's top 15, dropped
+STOCH_EXIT_GRID = [30, 35, 40, 50]  # widened down: pass 1's top result hit 40, the lower edge
+STOP_LOSS_PCT_GRID = [7.0, 8.0, 9.0, 10.0]  # widened up: pass 1's top result hit 7.0, the upper edge
 
 SORT_KEYS = {
     "win_rate": ["win_rate_pct", "sharpe"],
