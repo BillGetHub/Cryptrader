@@ -90,6 +90,19 @@ resolved) -- added 10 to bracket it on both sides. rsi_exit gave identical
 Sharpe across 28/29/30 at every other-parameter combo tested (the RSI exit
 rarely fires before the stop does in this regime) -- fixed to save runtime.
 
+Pass 4 (3840 combos) raised Sharpe again to **+2.38**. stop_loss_pct=4.5,
+short_rsi_exit (55/60, neither edge), rsi_period (10 ruled out, 12/14 both
+remain), and range_max_distance_pct=1.5 are all now confirmed bracketed --
+1.5 in particular is genuinely confirmed on both sides across passes 3-4
+(beat 2.0-3.0 going one direction, beat 0.75-1.25 going the other).
+short_rsi_entry narrowed to a confirmed-good 63-65 interior range. Only
+rsi_entry is still unresolved: top result at 14, the lower edge, for a
+fourth consecutive pass pushing lower (26 -> 22 -> 18 -> 14) -- worth one
+more check before trusting it, since a lever that keeps sliding toward an
+extreme every single pass is exactly the pattern an overfit result would
+show. Pass 5 (this grid) fixes everything else at its confirmed value and
+makes that check cheaply.
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
@@ -106,18 +119,17 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0, 5.5]  # widened down: pass 3's bimodal pattern resolved -- ALL top 15 now
-# at 5.0, the lower edge of pass 3's [5.0..6.5] grid; dropped 6.0/6.5 (clearly worse), widened down instead
-RSI_ENTRY_GRID = [14, 15, 16, 17, 18]  # widened down again: pass 3's top result still hit 18, the lower edge
-RSI_EXIT_GRID = [29]  # pass 3: 28/29/30 gave IDENTICAL Sharpe at every other-param combo (exit rarely fires
-# before the stop in this regime) -- fixed at 29 to save runtime
-SHORT_RSI_ENTRY_GRID = [62, 63, 64, 65, 66]  # fine bracket around 64, which is now interior (pass 3's grid was
-# [62..68]) and dominated completely -- checking it's a genuine peak, not just better than 62/66/68 specifically
-SHORT_RSI_EXIT_GRID = [50, 55, 60, 65]  # widened up: pass 3's ENTIRE top 15 sat at 55, the upper edge
-RSI_PERIOD_GRID = [10, 12, 14]  # pass 3: 12 now wins outright (previously bimodal with 14); added 10 to bracket
-# it properly on both sides
-RANGE_MAX_DISTANCE_PCT_GRID = [0.75, 1.0, 1.25, 1.5]  # widened down again: pass 3's ENTIRE top 15 sat at 1.5,
-# the lower edge -- SOL wants a much tighter range filter than any other coin tested so far
+STOP_LOSS_PCT_GRID = [4.5]  # confirmed interior peak in pass 4 (4.0 lost, 5.0/5.5 lost); fixed
+RSI_ENTRY_GRID = [10, 11, 12, 13, 14]  # widened down a fourth time: pass 4's top result still hit 14, the
+# lower edge -- this is now four consecutive passes pushing lower (26 -> 22 -> 18 -> 14); if this pass still
+# hits the edge, that's a real overfitting signal to weigh, not just "widen again"
+RSI_EXIT_GRID = [29]  # confirmed insensitive in pass 3; fixed
+SHORT_RSI_ENTRY_GRID = [63, 64, 65]  # narrowed to pass 4's confirmed-good interior range (62/66 lost)
+SHORT_RSI_EXIT_GRID = [55, 60]  # narrowed to pass 4's confirmed-good interior range (neither edge, 50 or 65,
+# ever appeared in the top 15)
+RSI_PERIOD_GRID = [12, 14]  # pass 4: 10 lost everywhere, ruled out; 12 and 14 remain two close regimes
+RANGE_MAX_DISTANCE_PCT_GRID = [1.5]  # confirmed bracketed on both sides across passes 3-4 (beat 2.0-3.0 in
+# pass 3, beat 0.75-1.25 in pass 4); fixed
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
