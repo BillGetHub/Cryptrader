@@ -103,12 +103,35 @@ extreme every single pass is exactly the pattern an overfit result would
 show. Pass 5 (this grid) fixes everything else at its confirmed value and
 makes that check cheaply.
 
+Pass 5 (60 combos) resolved it cleanly: rsi_entry gave an IDENTICAL Sharpe
+across the entire 10-14 range tested. Not an overfit slide -- a plateau.
+The joint (long+short) search's best config was then confirmed fully
+bracketed: --rsi-entry 14 --rsi-exit 29 --rsi-period 12 --stop-loss-pct 4.5
+--short-rsi-entry 64 --short-rsi-exit 55 --range-max-distance-pct 1.5,
+78.2% win rate, Sharpe +2.38, the best result in the project. BUT checking
+the long/short trade split (which this file didn't surface until the
+--long-only addition below) revealed **0 long trades, 119 short** -- the
+entire result is short-only, and Kraken spot can't short. The plateau
+across rsi_entry 10-14 makes sense in hindsight: no long trades fire in
+that whole range regardless of the exact threshold, so of course varying
+it made no difference. grid_search.py hardcoded enable_short=True in every
+combination and never checked whether the long side actually contributed
+trades -- fine for BTC/ETH/BNB, whose tuned entries (27-28) stayed in
+normal oversold territory where longs still fire often (BTC: 62 long/15
+short), but SOL's joint optimizer found it more profitable to abandon the
+long side entirely and lean on shorts. Added --long-only (disables the
+short leg, skips sweeping short_rsi_entry/short_rsi_exit) and a warning
+that fires automatically if a non-long-only run's top result has 0 long
+trades, so this blind spot doesn't recur silently. This grid is re-centered
+for SOL's first --long-only pass -- the joint search's findings don't
+transfer, since they were entirely a short-side artifact.
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
 
 Usage:
-    python grid_search.py --symbol SOLUSDT --source ccxt --exchange binance --interval 1h --period 730d
+    python grid_search.py --symbol SOLUSDT --source ccxt --exchange binance --long-only
     python grid_search.py --sort-by sharpe --top-n 20
 """
 import argparse
@@ -119,17 +142,15 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.5]  # confirmed interior peak in pass 4 (4.0 lost, 5.0/5.5 lost); fixed
-RSI_ENTRY_GRID = [10, 11, 12, 13, 14]  # widened down a fourth time: pass 4's top result still hit 14, the
-# lower edge -- this is now four consecutive passes pushing lower (26 -> 22 -> 18 -> 14); if this pass still
-# hits the edge, that's a real overfitting signal to weigh, not just "widen again"
-RSI_EXIT_GRID = [29]  # confirmed insensitive in pass 3; fixed
-SHORT_RSI_ENTRY_GRID = [63, 64, 65]  # narrowed to pass 4's confirmed-good interior range (62/66 lost)
-SHORT_RSI_EXIT_GRID = [55, 60]  # narrowed to pass 4's confirmed-good interior range (neither edge, 50 or 65,
-# ever appeared in the top 15)
-RSI_PERIOD_GRID = [12, 14]  # pass 4: 10 lost everywhere, ruled out; 12 and 14 remain two close regimes
-RANGE_MAX_DISTANCE_PCT_GRID = [1.5]  # confirmed bracketed on both sides across passes 3-4 (beat 2.0-3.0 in
-# pass 3, beat 0.75-1.25 in pass 4); fixed
+STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0, 5.5, 6.0]  # broad first-pass range; no long-only SOL data yet
+RSI_ENTRY_GRID = [24, 25, 26, 27, 28, 29]  # centered on BTC/ETH/BNB's shared 27-28 region -- the SOL joint
+# search's 10-14 result told us nothing about the long side (0 long trades fired there)
+RSI_EXIT_GRID = [28, 29, 30]  # all three other coins confirmed 29; bracketing a point either side
+SHORT_RSI_ENTRY_GRID = [999]  # unused placeholder in --long-only mode (short leg disabled)
+SHORT_RSI_EXIT_GRID = [0]  # unused placeholder in --long-only mode (short leg disabled)
+RSI_PERIOD_GRID = [12, 14]  # BTC uses 14, ETH/BNB both use 12 -- genuinely unknown for SOL long-only
+RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0, 4.0]  # spans SOL's short-side-tuned 1.5 through BNB's 4.0 --
+# unknown whether the long side wants the same tight filter as the (non-deployable) short-heavy result did
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
@@ -157,6 +178,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--top-n", type=int, default=15, help="how many top results to print")
     parser.add_argument("--csv-out", default=None, help="optional path to write every combination's results")
+    parser.add_argument(
+        "--long-only",
+        action="store_true",
+        help="Disable the short leg entirely (enable_short=False) and skip sweeping "
+        "short_rsi_entry/short_rsi_exit. Use when a coin's joint (long+short) search produces a "
+        "result dominated or entirely carried by the short side -- SOL's did (0 long / 119 short "
+        "trades in its top result), which is non-deployable since Kraken spot can't short. This "
+        "forces the search to find a genuine long-only edge instead.",
+    )
     args = parser.parse_args()
     if args.symbol is None:
         args.symbol = DEFAULT_SYMBOL[args.source]
@@ -170,20 +200,26 @@ def main() -> None:
     df = fetch_data(args)
     print(f"Got {len(df)} bars. Sweeping the grid...")
 
+    short_entry_grid = [SHORT_RSI_ENTRY_GRID[0]] if args.long_only else SHORT_RSI_ENTRY_GRID
+    short_exit_grid = [SHORT_RSI_EXIT_GRID[0]] if args.long_only else SHORT_RSI_EXIT_GRID
+
     combos = [
         combo
         for combo in itertools.product(
             STOP_LOSS_PCT_GRID,
             RSI_ENTRY_GRID,
             RSI_EXIT_GRID,
-            SHORT_RSI_ENTRY_GRID,
-            SHORT_RSI_EXIT_GRID,
+            short_entry_grid,
+            short_exit_grid,
             RSI_PERIOD_GRID,
             RANGE_MAX_DISTANCE_PCT_GRID,
         )
-        if combo[1] < combo[2] and combo[3] > combo[4]  # rsi_entry < rsi_exit, short_entry > short_exit
+        if combo[1] < combo[2] and (args.long_only or combo[3] > combo[4])  # rsi_entry < rsi_exit,
+        # short_entry > short_exit (short_rsi_* is a placeholder and unchecked in --long-only mode)
     ]
     print(f"{len(combos)} valid combinations (entry/exit bands non-overlapping).")
+    if args.long_only:
+        print("--long-only: short leg disabled, short_rsi_entry/short_rsi_exit not swept.")
 
     start = time.time()
     results = []
@@ -204,7 +240,7 @@ def main() -> None:
             stop_loss_pct,
             args.position_size_r,
             args.initial_balance,
-            enable_short=True,
+            enable_short=not args.long_only,
             short_rsi_entry=short_rsi_entry,
             short_rsi_exit=short_rsi_exit,
             enable_range_filter=True,
@@ -230,6 +266,8 @@ def main() -> None:
                 "sharpe": metrics["sharpe"],
                 "max_drawdown_pct": metrics["max_drawdown_pct"],
                 "num_trades": metrics["num_trades"],
+                "num_long_trades": metrics["num_long_trades"],
+                "num_short_trades": metrics["num_short_trades"],
             }
         )
         if (i + 1) % 200 == 0:
@@ -257,6 +295,13 @@ def main() -> None:
 
     sort_cols = SORT_KEYS[args.sort_by]
     results_df = results_df.sort_values(sort_cols, ascending=False)
+
+    if not args.long_only and results_df.iloc[0]["num_long_trades"] == 0:
+        print(
+            "WARNING: the top-sharpe combination has 0 long trades -- this result is entirely "
+            "short-side and NOT deployable on a spot exchange that can't short. Consider re-running "
+            "with --long-only to find a genuine long-side edge instead.\n"
+        )
 
     print(f"Top {args.top_n} by {args.sort_by} (tiebreak: {sort_cols[1]}):")
     with pd.option_context("display.max_columns", None, "display.width", 220):
