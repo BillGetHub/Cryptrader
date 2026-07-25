@@ -126,6 +126,18 @@ trades, so this blind spot doesn't recur silently. This grid is re-centered
 for SOL's first --long-only pass -- the joint search's findings don't
 transfer, since they were entirely a short-side artifact.
 
+Long-only pass 1 (750 combos) was weak: best Sharpe only -0.20 (negative),
+all 750 combos hit Failure. Possible SOL's long side genuinely has little
+edge with this strategy shape in this window (plausible if SOL trended hard
+for much of it, leaving few clean range-bound dips) -- but rsi_entry's
+entire top 15 still sat at 24, the lower edge, so that's not yet ruled out.
+range_max_distance_pct was already well-bracketed at 2.5 (neither true
+edge, 1.5 or 4.0, ever appeared) -- narrowed to save runtime. rsi_period=14
+dominated completely over 12, though only two values have been tried.
+Pass 2 (this grid) widens rsi_entry down further; if this still doesn't
+clear Failure or approach a workable Sharpe, that's real evidence SOL's
+long side doesn't have a usable edge here, not just an under-searched grid.
+
 Note: total_return_pct is the return over the whole fetched period, not a
 30-day figure -- use worst_30d_return_pct / best_30d_return_pct to check
 against CLAUDE.md's actual +5%/30d and -4%/30d thresholds.
@@ -142,15 +154,14 @@ import pandas as pd
 
 from backtest import DEFAULT_SYMBOL, INTERVAL_BARS_PER_YEAR, compute_metrics, fetch_data, simulate
 
-STOP_LOSS_PCT_GRID = [4.0, 4.5, 5.0, 5.5, 6.0]  # broad first-pass range; no long-only SOL data yet
-RSI_ENTRY_GRID = [24, 25, 26, 27, 28, 29]  # centered on BTC/ETH/BNB's shared 27-28 region -- the SOL joint
-# search's 10-14 result told us nothing about the long side (0 long trades fired there)
-RSI_EXIT_GRID = [28, 29, 30]  # all three other coins confirmed 29; bracketing a point either side
+STOP_LOSS_PCT_GRID = [3.0, 3.5, 4.0, 4.5]  # widened down: pass 1 leaned on 4.0, the lower edge of [4.0..6.0]
+RSI_ENTRY_GRID = [18, 19, 20, 21, 22, 23, 24]  # widened down: pass 1's ENTIRE top 15 sat at 24, the lower edge
+RSI_EXIT_GRID = [28, 29, 30]  # pass 1: no edge signal; kept as-is
 SHORT_RSI_ENTRY_GRID = [999]  # unused placeholder in --long-only mode (short leg disabled)
 SHORT_RSI_EXIT_GRID = [0]  # unused placeholder in --long-only mode (short leg disabled)
-RSI_PERIOD_GRID = [12, 14]  # BTC uses 14, ETH/BNB both use 12 -- genuinely unknown for SOL long-only
-RANGE_MAX_DISTANCE_PCT_GRID = [1.5, 2.0, 2.5, 3.0, 4.0]  # spans SOL's short-side-tuned 1.5 through BNB's 4.0 --
-# unknown whether the long side wants the same tight filter as the (non-deployable) short-heavy result did
+RSI_PERIOD_GRID = [12, 14]  # pass 1: 14 dominated completely (12 never appeared in top 15); kept both for now
+RANGE_MAX_DISTANCE_PCT_GRID = [2.0, 2.5, 3.0]  # narrowed to pass 1's confirmed-good interior region (2.5 beat
+# both its neighbors and neither true edge, 1.5 or 4.0, ever appeared) -- saves runtime
 RANGE_MA_PERIOD = 200  # confirmed best against 100 and 300 by hand (on BTC); not swept here
 
 SORT_KEYS = {
